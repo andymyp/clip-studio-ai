@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/middleware"
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/model"
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/repository"
 	"github.com/gin-gonic/gin"
@@ -43,7 +44,8 @@ func (handler *Handler) JobEvents(c *gin.Context) {
 		return
 	}
 
-	job, err := handler.jobs.GetByID(c.Request.Context(), id)
+	userID, _ := middleware.UserID(c)
+	job, err := handler.jobs.GetByIDForUser(c.Request.Context(), id, userID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "resource not found"})
@@ -87,7 +89,7 @@ func (handler *Handler) JobEvents(c *gin.Context) {
 		case <-c.Request.Context().Done():
 			return
 		case <-ticker.C:
-			current, getErr := handler.jobs.GetByID(c.Request.Context(), id)
+			current, getErr := handler.jobs.GetByIDForUser(c.Request.Context(), id, userID)
 			if getErr != nil {
 				handler.logger.Warn(
 					"stop job event stream",

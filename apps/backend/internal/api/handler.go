@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/middleware"
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/model"
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/service"
 	"github.com/gin-gonic/gin"
@@ -76,7 +77,8 @@ func (handler *Handler) SearchVideos(c *gin.Context) {
 		return
 	}
 
-	videos, err := handler.videos.Search(c.Request.Context(), query.Keyword)
+	userID, _ := middleware.UserID(c)
+	videos, err := handler.videos.Search(c.Request.Context(), userID, query.Keyword)
 	if err != nil {
 		writeError(c, handler.logger, err)
 		return
@@ -97,7 +99,8 @@ func (handler *Handler) GetVideo(c *gin.Context) {
 	if !ok {
 		return
 	}
-	video, err := handler.videos.Get(c.Request.Context(), id)
+	userID, _ := middleware.UserID(c)
+	video, err := handler.videos.Get(c.Request.Context(), userID, id)
 	if err != nil {
 		writeError(c, handler.logger, err)
 		return
@@ -115,7 +118,8 @@ func (handler *Handler) AnalyzeVideo(c *gin.Context) {
 	if !ok {
 		return
 	}
-	job, err := handler.videos.Analyze(c.Request.Context(), id)
+	userID, _ := middleware.UserID(c)
+	job, err := handler.videos.Analyze(c.Request.Context(), userID, id)
 	if err != nil {
 		writeError(c, handler.logger, err)
 		return

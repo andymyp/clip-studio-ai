@@ -18,7 +18,8 @@ type UserRepositoryContract interface {
 type VideoRepositoryContract interface {
 	Create(context.Context, *model.Video) error
 	GetByID(context.Context, uuid.UUID) (*model.Video, error)
-	Search(context.Context, string, int) ([]model.Video, error)
+	GetByIDForUser(context.Context, uuid.UUID, uuid.UUID) (*model.Video, error)
+	Search(context.Context, uuid.UUID, string, int) ([]model.Video, error)
 	ListByUserID(context.Context, uuid.UUID, int, int) ([]model.Video, error)
 	Update(context.Context, *model.Video) error
 	Delete(context.Context, uuid.UUID) error
@@ -35,6 +36,7 @@ type ClipRepositoryContract interface {
 type AnalysisJobRepositoryContract interface {
 	Create(context.Context, *model.AnalysisJob) error
 	GetByID(context.Context, uuid.UUID) (*model.AnalysisJob, error)
+	GetByIDForUser(context.Context, uuid.UUID, uuid.UUID) (*model.AnalysisJob, error)
 	ListByVideoID(context.Context, uuid.UUID) ([]model.AnalysisJob, error)
 	Update(context.Context, *model.AnalysisJob) error
 	Delete(context.Context, uuid.UUID) error

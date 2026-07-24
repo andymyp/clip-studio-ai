@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	taskqueue "github.com/clipstudio-ai/clipstudio-ai/backend/internal/queue"
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/repository"
+	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/service"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -22,9 +24,13 @@ type Dependencies struct {
 	Redis        *redis.Client
 	AsynqClient  *asynq.Client
 	Logger       *zap.Logger
+	Auth         *service.AuthService
 }
 
 func Open(cfg Config) (*Dependencies, error) {
+	if cfg.Environment == "production" && cfg.JWTSecret == developmentJWTSecret {
+		return nil, errors.New("JWT_SECRET must be changed in production")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -71,13 +77,31 @@ func Open(cfg Config) (*Dependencies, error) {
 	}
 
 	asynqClient := taskqueue.NewClient(cfg.RedisAddr)
+	repositories := repository.New(connection.GORM)
+	authService, err := service.NewAuthService(
+		repositories.Users,
+		repository.NewRedisRefreshTokenStore(redisClient),
+		service.AuthConfig{
+			Secret: cfg.JWTSecret, Issuer: cfg.JWTIssuer,
+			AccessTTL: cfg.AccessTokenTTL, RefreshTTL: cfg.RefreshTokenTTL,
+			BcryptCost: cfg.BcryptCost,
+		},
+	)
+	if err != nil {
+		asynqClient.Close()
+		_ = connection.Close()
+		_ = redisClient.Close()
+		_ = appLogger.Sync()
+		return nil, fmt.Errorf("initialize authentication: %w", err)
+	}
 	return &Dependencies{
 		DB:           connection.GORM,
 		Database:     connection,
-		Repositories: repository.New(connection.GORM),
+		Repositories: repositories,
 		Redis:        redisClient,
 		AsynqClient:  asynqClient,
 		Logger:       appLogger,
+		Auth:         authService,
 	}, nil
 }
 
@@ -103,5 +127,5 @@ func newLogger(environment string) (*zap.Logger, error) {
 }
 
 func encodeLogTime(value time.Time, encoder zapcore.PrimitiveArrayEncoder) {
-	encoder.AppendString(value.Local().Format("2006/01/02 - 15:04:05"))
+	encoder.AppendString(value.Local().Format("2006-01-02 15:04"))
 }

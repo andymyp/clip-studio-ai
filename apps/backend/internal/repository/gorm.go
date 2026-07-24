@@ -6,6 +6,7 @@ import (
 
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/model"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -18,7 +19,7 @@ func (repo *baseRepository[T]) Create(ctx context.Context, entity *T) error {
 	if identifiable, ok := any(entity).(interface{ EnsureID() }); ok {
 		identifiable.EnsureID()
 	}
-	return repo.db.WithContext(ctx).Omit(clause.Associations).Create(entity).Error
+	return translateError(repo.db.WithContext(ctx).Omit(clause.Associations).Create(entity).Error)
 }
 
 func (repo *baseRepository[T]) getByID(ctx context.Context, id uuid.UUID) (*T, error) {
@@ -83,6 +84,10 @@ func translateError(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrNotFound
 	}
+	var postgresError *pgconn.PgError
+	if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+		return ErrConflict
+	}
 	return err
 }
 
@@ -106,15 +111,29 @@ func (repo *VideoRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.
 	return repo.getByID(ctx, id)
 }
 
+func (repo *VideoRepository) GetByIDForUser(
+	ctx context.Context,
+	id uuid.UUID,
+	userID uuid.UUID,
+) (*model.Video, error) {
+	var video model.Video
+	if err := repo.db.WithContext(ctx).
+		First(&video, "id = ? AND user_id = ?", id, userID).Error; err != nil {
+		return nil, translateError(err)
+	}
+	return &video, nil
+}
+
 func (repo *VideoRepository) Search(
 	ctx context.Context,
+	userID uuid.UUID,
 	keyword string,
 	limit int,
 ) ([]model.Video, error) {
 	var videos []model.Video
 	pattern := "%" + keyword + "%"
 	err := repo.db.WithContext(ctx).
-		Where("title ILIKE ? OR description ILIKE ?", pattern, pattern).
+		Where("user_id = ? AND (title ILIKE ? OR description ILIKE ?)", userID, pattern, pattern).
 		Order("views DESC, created_at DESC").
 		Limit(limit).
 		Find(&videos).Error
@@ -152,6 +171,22 @@ func (repo *AnalysisJobRepository) GetByID(
 	id uuid.UUID,
 ) (*model.AnalysisJob, error) {
 	return repo.getByID(ctx, id)
+}
+
+func (repo *AnalysisJobRepository) GetByIDForUser(
+	ctx context.Context,
+	id uuid.UUID,
+	userID uuid.UUID,
+) (*model.AnalysisJob, error) {
+	var job model.AnalysisJob
+	err := repo.db.WithContext(ctx).
+		Joins("JOIN videos ON videos.id = analysis_jobs.video_id").
+		Where("analysis_jobs.id = ? AND videos.user_id = ?", id, userID).
+		First(&job).Error
+	if err != nil {
+		return nil, translateError(err)
+	}
+	return &job, nil
 }
 
 func (repo *AnalysisJobRepository) ListByVideoID(

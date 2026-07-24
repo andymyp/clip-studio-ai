@@ -19,7 +19,14 @@ func (repo *fakeVideoRepository) Create(context.Context, *model.Video) error { r
 func (repo *fakeVideoRepository) GetByID(context.Context, uuid.UUID) (*model.Video, error) {
 	return repo.video, nil
 }
-func (repo *fakeVideoRepository) Search(context.Context, string, int) ([]model.Video, error) {
+func (repo *fakeVideoRepository) GetByIDForUser(
+	context.Context,
+	uuid.UUID,
+	uuid.UUID,
+) (*model.Video, error) {
+	return repo.video, nil
+}
+func (repo *fakeVideoRepository) Search(context.Context, uuid.UUID, string, int) ([]model.Video, error) {
 	return nil, nil
 }
 func (repo *fakeVideoRepository) ListByUserID(context.Context, uuid.UUID, int, int) ([]model.Video, error) {
@@ -39,6 +46,13 @@ func (repo *fakeJobRepository) Create(_ context.Context, job *model.AnalysisJob)
 	return nil
 }
 func (repo *fakeJobRepository) GetByID(context.Context, uuid.UUID) (*model.AnalysisJob, error) {
+	return repo.created, nil
+}
+func (repo *fakeJobRepository) GetByIDForUser(
+	context.Context,
+	uuid.UUID,
+	uuid.UUID,
+) (*model.AnalysisJob, error) {
 	return repo.created, nil
 }
 func (repo *fakeJobRepository) ListByVideoID(context.Context, uuid.UUID) ([]model.AnalysisJob, error) {
@@ -73,7 +87,7 @@ func TestAnalyzeCreatesAndEnqueuesJob(t *testing.T) {
 		"analysis",
 	)
 
-	job, err := service.Analyze(context.Background(), videoID)
+	job, err := service.Analyze(context.Background(), uuid.New(), videoID)
 	if err != nil {
 		t.Fatalf("Analyze() error = %v", err)
 	}
@@ -98,7 +112,7 @@ func TestAnalyzeRemovesJobWhenEnqueueFails(t *testing.T) {
 		"default",
 	)
 
-	job, err := service.Analyze(context.Background(), videoID)
+	job, err := service.Analyze(context.Background(), uuid.New(), videoID)
 	if err == nil {
 		t.Fatal("Analyze() error = nil, want enqueue error")
 	}

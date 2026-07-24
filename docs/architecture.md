@@ -31,6 +31,12 @@ The Go backend uses a feature-oriented internal package layout:
 | `internal/queue` | Asynq client setup and typed task payloads |
 | `internal/sse` | Analysis-job event streaming |
 
+Authentication uses short-lived HMAC-SHA256 access JWTs and rotating refresh
+JWTs. Only refresh-token IDs are retained in Redis; passwords are stored as
+bcrypt hashes in PostgreSQL. Every `/api/*` route passes through Bearer-token
+middleware, and video/job repository queries are scoped to the authenticated
+user ID.
+
 ## Storage
 
 `storage/input`, `storage/output`, and `storage/temp` are mounted into services at `/app/storage`. Production deployments should replace this local filesystem contract with durable object storage or a managed shared volume.

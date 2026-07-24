@@ -29,16 +29,28 @@ func NewService(
 	return &Service{videos: videos, jobs: jobs, queue: queue, name: queueName}
 }
 
-func (service *Service) Search(ctx context.Context, keyword string) ([]model.Video, error) {
-	return service.videos.Search(ctx, keyword, searchLimit)
+func (service *Service) Search(
+	ctx context.Context,
+	userID uuid.UUID,
+	keyword string,
+) ([]model.Video, error) {
+	return service.videos.Search(ctx, userID, keyword, searchLimit)
 }
 
-func (service *Service) Get(ctx context.Context, id uuid.UUID) (*model.Video, error) {
-	return service.videos.GetByID(ctx, id)
+func (service *Service) Get(
+	ctx context.Context,
+	userID uuid.UUID,
+	id uuid.UUID,
+) (*model.Video, error) {
+	return service.videos.GetByIDForUser(ctx, id, userID)
 }
 
-func (service *Service) Analyze(ctx context.Context, videoID uuid.UUID) (*model.AnalysisJob, error) {
-	if _, err := service.videos.GetByID(ctx, videoID); err != nil {
+func (service *Service) Analyze(
+	ctx context.Context,
+	userID uuid.UUID,
+	videoID uuid.UUID,
+) (*model.AnalysisJob, error) {
+	if _, err := service.videos.GetByIDForUser(ctx, videoID, userID); err != nil {
 		return nil, err
 	}
 

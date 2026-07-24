@@ -8,6 +8,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+const developmentJWTSecret = "development-only-change-this-secret"
+
 type Config struct {
 	Environment     string
 	Port            string
@@ -19,6 +21,11 @@ type Config struct {
 	DBMaxIdle       int
 	DBMaxLife       time.Duration
 	ShutdownTimeout time.Duration
+	JWTSecret       string
+	JWTIssuer       string
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
+	BcryptCost      int
 }
 
 func LoadConfig() Config {
@@ -38,6 +45,11 @@ func LoadConfig() Config {
 		DBMaxIdle:       envInt("DB_MAX_IDLE_CONNS", 10),
 		DBMaxLife:       envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
+		JWTSecret:       env("JWT_SECRET", developmentJWTSecret),
+		JWTIssuer:       env("JWT_ISSUER", "clipstudio-ai"),
+		AccessTokenTTL:  envDuration("JWT_ACCESS_TTL", 15*time.Minute),
+		RefreshTokenTTL: envDuration("JWT_REFRESH_TTL", 7*24*time.Hour),
+		BcryptCost:      envInt("BCRYPT_COST", 12),
 	}
 }
 

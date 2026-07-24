@@ -18,6 +18,7 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 		cfg.AsynqQueue,
 	)
 	handler := NewHandler(videoService, deps.Logger)
+	authHandler := NewAuthHandler(deps.Auth, deps.Logger)
 	eventHandler := sse.NewHandler(deps.Repositories.AnalysisJobs, deps.Logger)
 
 	router := gin.New()
@@ -25,11 +26,28 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 		middleware.RequestIDMiddleware(),
 		middleware.LoggerMiddleware(deps.Logger, cfg.Environment != "production"),
 		middleware.RecoveryMiddleware(deps.Logger),
-		cors.Default(),
+		cors.New(cors.Config{
+			AllowOrigins: []string{"*"},
+			AllowMethods: []string{
+				"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
+			},
+			AllowHeaders: []string{
+				"Origin", "Content-Type", "Content-Length", "Authorization",
+				"X-Request-ID",
+			},
+			ExposeHeaders: []string{"X-Request-ID"},
+		}),
 	)
 
 	router.GET("/health", handler.Health)
+
+	auth := router.Group("/auth")
+	auth.POST("/register", authHandler.Register)
+	auth.POST("/login", authHandler.Login)
+	auth.POST("/refresh", authHandler.Refresh)
+
 	api := router.Group("/api")
+	api.Use(middleware.Authenticate(deps.Auth))
 	api.GET("/videos/search", handler.SearchVideos)
 	api.GET("/videos/:id", handler.GetVideo)
 	api.POST("/videos/:id/analyze", handler.AnalyzeVideo)

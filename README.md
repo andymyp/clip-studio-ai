@@ -174,10 +174,33 @@ it is first required.
 | Method | Endpoint                             | Purpose                              |
 | ------ | ------------------------------------ | ------------------------------------ |
 | GET    | `/health`                            | Service health                       |
+| POST   | `/auth/register`                     | Register and receive a token pair    |
+| POST   | `/auth/login`                        | Authenticate and receive tokens      |
+| POST   | `/auth/refresh`                      | Rotate a valid refresh token         |
 | GET    | `/api/videos/search?keyword=podcast` | Search persisted videos              |
 | GET    | `/api/videos/:id`                    | Get video metadata                   |
 | POST   | `/api/videos/:id/analyze`            | Create and enqueue an analysis job   |
 | GET    | `/api/jobs/:id/events`               | Stream analysis progress using SSE   |
+
+All `/api/*` routes require an access token:
+
+```text
+Authorization: Bearer <access_token>
+```
+
+Register and login accept an email and a password between 8 and 72 bytes:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "a-strong-password"
+}
+```
+
+Passwords are stored only as bcrypt hashes. Access tokens expire after 15
+minutes by default. Refresh tokens expire after seven days, are backed by
+Redis, and rotate on every successful refresh; replaying a consumed refresh
+token is rejected.
 
 Analysis requests return HTTP `202 Accepted`. The queued task type is
 `video:analyze`; its JSON payload contains `job_id` and `video_id`. Run
@@ -257,12 +280,12 @@ Included:
 - health endpoints;
 - persisted video search and detail endpoints;
 - queued analysis jobs and SSE progress events;
+- JWT registration, login, rotating refresh tokens, and Bearer middleware;
 - container builds and local orchestration;
 - persistent development storage.
 
 Deferred:
 
-- authentication and authorization;
 - uploads and media ingestion;
 - analysis task processing;
 - transcription and AI pipelines;

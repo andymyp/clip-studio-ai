@@ -27,7 +27,7 @@ clips, analysis jobs, render jobs, subtitles, and watermarks.
 | -------------------------- | ------------------- |
 | `id`                       | UUID primary key    |
 | `email`                    | Required and unique |
-| `name`                     | Required            |
+| `password_hash`            | Required bcrypt hash; never serialized |
 | `created_at`, `updated_at` | Timestamps          |
 
 ### videos

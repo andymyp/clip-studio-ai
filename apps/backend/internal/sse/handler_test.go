@@ -21,6 +21,13 @@ func (repo *staticJobRepository) Create(context.Context, *model.AnalysisJob) err
 func (repo *staticJobRepository) GetByID(context.Context, uuid.UUID) (*model.AnalysisJob, error) {
 	return repo.job, nil
 }
+func (repo *staticJobRepository) GetByIDForUser(
+	context.Context,
+	uuid.UUID,
+	uuid.UUID,
+) (*model.AnalysisJob, error) {
+	return repo.job, nil
+}
 func (repo *staticJobRepository) ListByVideoID(context.Context, uuid.UUID) ([]model.AnalysisJob, error) {
 	return nil, nil
 }
