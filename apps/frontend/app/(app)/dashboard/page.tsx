@@ -68,8 +68,8 @@ export default function DashboardPage() {
         description="Find high-potential moments, start analysis, and keep your clipping workflow moving."
         action={
           <Button asChild className="h-10 rounded-xl px-4">
-            <Link href="/videos">
-              Explore videos
+            <Link href="/clips">
+              Explore clips
               <ArrowRight />
             </Link>
           </Button>
@@ -82,7 +82,7 @@ export default function DashboardPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                <p className="mt-3 font-heading text-3xl font-bold tracking-[-0.05em]">
+                <p className="mt-3 font-heading text-3xl font-bold tracking-tighter">
                   {stat.label === "Videos discovered" && videos.data
                     ? videos.data.length
                     : stat.value}
@@ -108,7 +108,7 @@ export default function DashboardPage() {
               Podcast videos
             </h2>
           </div>
-          <Link href="/videos" className="text-sm font-semibold text-violet-700 hover:text-violet-900">
+          <Link href="/clips" className="text-sm font-semibold text-violet-700 hover:text-violet-900">
             View all
           </Link>
         </div>

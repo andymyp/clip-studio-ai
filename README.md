@@ -176,7 +176,7 @@ it is first required.
 | `/signin`    | JWT login                                    |
 | `/signup`    | Account registration                         |
 | `/dashboard` | Video overview and quick analysis actions    |
-| `/videos`    | Searchable video library                     |
+| `/clips`     | Searchable generated clips library            |
 | `/logs`      | Backend clip-analysis queue status             |
 
 Dashboard routes are client-protected and use Axios JWT refresh interceptors.

@@ -20,7 +20,7 @@ import { useAuthStore } from "@/stores/auth-store";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: House },
-  { href: "/videos", label: "Videos", icon: FilmSlate },
+  { href: "/clips", label: "Clips", icon: FilmSlate },
   { href: "/logs", label: "Logs", icon: ClockCounterClockwise },
 ];
 
