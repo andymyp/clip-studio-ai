@@ -194,6 +194,7 @@ The Compose stack provides:
 | `pnpm docker:ps`           | Show service status and health                |
 | `pnpm docker:down`         | Stop and remove containers                    |
 | `pnpm docker:down:volumes` | Remove containers and persistent data volumes |
+| `pnpm db:migrate`          | Apply additive GORM database migrations       |
 
 Warning: `pnpm docker:down:volumes` permanently removes local PostgreSQL,
 Redis, and Ollama volume data.
@@ -233,4 +234,5 @@ Deferred:
 - prompts and product user interfaces.
 
 See [docs/architecture.md](docs/architecture.md) for the intended service
-boundaries and data flow.
+boundaries and data flow. See [docs/database.md](docs/database.md) for tables,
+relations, constraints, indexes, and migration behavior.

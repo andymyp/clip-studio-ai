@@ -30,7 +30,8 @@
     "docker:down:volumes": "docker compose --env-file .env.root down --volumes",
     "docker:build": "docker compose --env-file .env.root build",
     "docker:logs": "docker compose --env-file .env.root logs --follow",
-    "docker:ps": "docker compose --env-file .env.root ps"
+    "docker:ps": "docker compose --env-file .env.root ps",
+    "db:migrate": "go -C backend run ./cmd/migrate"
   },
   "devDependencies": {
     "concurrently": "^9.2.0",
