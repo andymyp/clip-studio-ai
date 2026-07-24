@@ -12,6 +12,7 @@ import (
 )
 
 const searchLimit = 50
+const jobLogLimit = 100
 
 type Service struct {
 	videos repository.VideoRepositoryContract
@@ -80,4 +81,11 @@ func (service *Service) Analyze(
 	}
 
 	return job, nil
+}
+
+func (service *Service) JobLogs(
+	ctx context.Context,
+	userID uuid.UUID,
+) ([]model.AnalysisJob, error) {
+	return service.jobs.ListByUserID(ctx, userID, jobLogLimit)
 }

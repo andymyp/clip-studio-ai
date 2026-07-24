@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  ClockCounterClockwise,
-  FilmSlate,
-  House,
-  List,
-  SignOut,
-  Sparkle,
+  ClockCounterClockwiseIcon as ClockCounterClockwise,
+  FilmSlateIcon as FilmSlate,
+  HouseIcon as House,
+  ListIcon as List,
+  SignOutIcon as SignOut,
+  SparkleIcon as Sparkle,
 } from "@phosphor-icons/react";
 import Image from "next/image";
 import Link from "next/link";
@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (!hydrated || !accessToken) {
     return (
       <div className="grid min-h-screen place-items-center bg-[#f7f5f2]">
-        <Sparkle weight="fill" className="size-7 animate-pulse text-violet-600" />
+        <img src="./logo.png" className="h-14 animate-pulse" />
       </div>
     );
   }
@@ -110,7 +110,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {user?.email.slice(0, 2) ?? "CS"}
           </div>
         </header>
-        <main className="mx-auto max-w-[1440px] px-5 py-7 pb-24 md:px-8 md:py-10 lg:pb-10">
+        <main className="mx-auto max-w-360 px-5 py-7 pb-24 md:px-8 md:py-10 lg:pb-10">
           {children}
         </main>
       </div>

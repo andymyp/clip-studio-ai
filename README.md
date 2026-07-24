@@ -7,7 +7,7 @@ backend video and analysis-job APIs, and development tooling.
 ## Technology
 
 - Frontend: Next.js 16, TypeScript, Tailwind CSS 4, shadcn/ui, TanStack Query,
-  Axios, Zustand, and BProgress
+  Axios, Zustand, React Hook Form, Zod, Sonner, and BProgress
 - Backend: Go 1.26.4, Gin, GORM, PostgreSQL, Redis, Asynq, and SSE
 - Worker: Python 3.14 container runtime, FastAPI, FFmpeg, yt-dlp, and Faster Whisper
 - Infrastructure: Docker Compose, PostgreSQL 16, Redis 7, and Ollama
@@ -177,11 +177,11 @@ it is first required.
 | `/signup`    | Account registration                         |
 | `/dashboard` | Video overview and quick analysis actions    |
 | `/videos`    | Searchable video library                     |
-| `/logs`      | Browser-local authentication and job activity |
+| `/logs`      | Backend clip-analysis queue status             |
 
 Dashboard routes are client-protected and use Axios JWT refresh interceptors.
-TanStack Query manages server state, while Zustand persists the authenticated
-session and local activity history.
+TanStack Query manages videos and backend queue logs, while Zustand persists
+only the authenticated session.
 
 ### Backend API
 
@@ -195,6 +195,7 @@ session and local activity history.
 | GET    | `/api/videos/:id`                    | Get video metadata                   |
 | POST   | `/api/videos/:id/analyze`            | Create and enqueue an analysis job   |
 | GET    | `/api/jobs/:id/events`               | Stream analysis progress using SSE   |
+| GET    | `/api/logs`                          | List authenticated queue-job status  |
 
 All `/api/*` routes require an access token:
 
@@ -295,7 +296,7 @@ Included:
 - persisted video search and detail endpoints;
 - queued analysis jobs and SSE progress events;
 - JWT registration, login, rotating refresh tokens, and Bearer middleware;
-- responsive sign-in, sign-up, dashboard, videos, and activity-log interfaces;
+- responsive sign-in, sign-up, dashboard, videos, and queue-log interfaces;
 - container builds and local orchestration;
 - persistent development storage.
 

@@ -1,6 +1,10 @@
 "use client";
 
-import { ArrowSquareOut, MagicWand, Play } from "@phosphor-icons/react";
+import {
+  ArrowSquareOutIcon as ArrowSquareOut,
+  MagicWandIcon as MagicWand,
+  PlayIcon as Play,
+} from "@phosphor-icons/react";
 import Image from "next/image";
 
 import { Badge } from "@/components/ui/badge";

@@ -52,6 +52,7 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 	api.GET("/videos/:id", handler.GetVideo)
 	api.POST("/videos/:id/analyze", handler.AnalyzeVideo)
 	api.GET("/jobs/:id/events", eventHandler.JobEvents)
+	api.GET("/logs", handler.JobLogs)
 
 	return router
 }

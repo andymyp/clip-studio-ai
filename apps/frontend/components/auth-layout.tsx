@@ -1,7 +1,15 @@
-import { CheckCircle, Scissors, Sparkle } from "@phosphor-icons/react/dist/ssr";
+"use client";
+
+import { useAuthStore } from "@/stores/auth-store";
+import {
+  CheckCircleIcon as CheckCircle,
+  ScissorsIcon as Scissors,
+  SparkleIcon as Sparkle,
+} from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
 
 export function AuthLayout({
   eyebrow,
@@ -14,6 +22,23 @@ export function AuthLayout({
   description: string;
   children: ReactNode;
 }) {
+  const router = useRouter();
+  const { user, accessToken, hydrated, clearSession } = useAuthStore();
+
+  useEffect(() => {
+    if (hydrated && accessToken) {
+      router.replace("/dashboard");
+    }
+  }, [accessToken, hydrated, router]);
+
+  if (!hydrated || accessToken) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#f7f5f2]">
+        <img src="./logo.png" className="h-14 animate-pulse" />
+      </div>
+    );
+  }
+
   return (
     <main className="grid min-h-screen bg-[#f7f5f2] lg:grid-cols-[1.05fr_0.95fr]">
       <section className="relative hidden overflow-hidden bg-[#20172b] p-12 text-white lg:flex lg:flex-col">
@@ -61,7 +86,7 @@ export function AuthLayout({
             <Sparkle weight="fill" />
             {eyebrow}
           </div>
-          <h1 className="mt-5 font-heading text-4xl font-bold tracking-[-0.05em]">{title}</h1>
+          <h1 className="mt-5 font-heading text-4xl font-bold tracking-tighter">{title}</h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
           {children}
         </div>

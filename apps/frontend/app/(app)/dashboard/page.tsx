@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  ArrowRight,
-  FilmStrip,
-  Lightning,
-  MagicWand,
-  TrendUp,
+  ArrowRightIcon as ArrowRight,
+  FilmStripIcon as FilmStrip,
+  LightningIcon as Lightning,
+  MagicWandIcon as MagicWand,
+  TrendUpIcon as TrendUp,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useState } from "react";
@@ -15,9 +15,9 @@ import { VideoCard } from "@/components/video-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiErrorMessage } from "@/lib/api";
-import { useAnalyzeVideo, useVideoSearch } from "@/lib/queries";
+import { useAnalyzeVideo } from "@/hooks/mutations/use-analyze-video";
+import { useVideoSearch } from "@/hooks/queries/use-video-search";
 import type { Video } from "@/lib/types";
-import { useActivityStore } from "@/stores/activity-store";
 import { useAuthStore } from "@/stores/auth-store";
 
 const stats = [
@@ -46,7 +46,6 @@ const stats = [
 
 export default function DashboardPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
-  const addLog = useActivityStore((state) => state.addLog);
   const [analyzingID, setAnalyzingID] = useState<string>();
   const videos = useVideoSearch("podcast", Boolean(accessToken));
   const analyze = useAnalyzeVideo();
@@ -55,20 +54,6 @@ export default function DashboardPage() {
     if (!video.id) return;
     setAnalyzingID(video.id);
     analyze.mutate(video.id, {
-      onSuccess: (job) => {
-        addLog({
-          action: "Analysis queued",
-          detail: `${video.title} · Job ${job.id.slice(0, 8)}`,
-          status: "pending",
-        });
-      },
-      onError: (error) => {
-        addLog({
-          action: "Analysis failed",
-          detail: apiErrorMessage(error),
-          status: "error",
-        });
-      },
       onSettled: () => setAnalyzingID(undefined),
     });
   }

@@ -38,6 +38,7 @@ type AnalysisJobRepositoryContract interface {
 	GetByID(context.Context, uuid.UUID) (*model.AnalysisJob, error)
 	GetByIDForUser(context.Context, uuid.UUID, uuid.UUID) (*model.AnalysisJob, error)
 	ListByVideoID(context.Context, uuid.UUID) ([]model.AnalysisJob, error)
+	ListByUserID(context.Context, uuid.UUID, int) ([]model.AnalysisJob, error)
 	Update(context.Context, *model.AnalysisJob) error
 	Delete(context.Context, uuid.UUID) error
 }

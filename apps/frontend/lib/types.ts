@@ -46,3 +46,14 @@ export type AnalysisJob = {
   progress: number;
   message: string;
 };
+
+export type JobLog = {
+  id: string;
+  video_id: string;
+  video_title: string;
+  status: "queued" | "pending" | "processing" | "completed" | "failed" | "cancelled";
+  progress: number;
+  message: string;
+  created_at: string;
+  updated_at: string;
+};

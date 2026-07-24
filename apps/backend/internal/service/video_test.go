@@ -58,6 +58,13 @@ func (repo *fakeJobRepository) GetByIDForUser(
 func (repo *fakeJobRepository) ListByVideoID(context.Context, uuid.UUID) ([]model.AnalysisJob, error) {
 	return nil, nil
 }
+func (repo *fakeJobRepository) ListByUserID(
+	context.Context,
+	uuid.UUID,
+	int,
+) ([]model.AnalysisJob, error) {
+	return nil, nil
+}
 func (repo *fakeJobRepository) Update(context.Context, *model.AnalysisJob) error { return nil }
 func (repo *fakeJobRepository) Delete(_ context.Context, id uuid.UUID) error {
 	repo.deleted = id

@@ -31,6 +31,13 @@ func (repo *staticJobRepository) GetByIDForUser(
 func (repo *staticJobRepository) ListByVideoID(context.Context, uuid.UUID) ([]model.AnalysisJob, error) {
 	return nil, nil
 }
+func (repo *staticJobRepository) ListByUserID(
+	context.Context,
+	uuid.UUID,
+	int,
+) ([]model.AnalysisJob, error) {
+	return nil, nil
+}
 func (repo *staticJobRepository) Update(context.Context, *model.AnalysisJob) error { return nil }
 func (repo *staticJobRepository) Delete(context.Context, uuid.UUID) error          { return nil }
 

@@ -26,7 +26,7 @@ type Connection struct {
 
 func Open(ctx context.Context, cfg Config) (*Connection, error) {
 	db, err := gorm.Open(postgres.Open(cfg.URL), &gorm.Config{
-		Logger: logger.Default.LogMode(cfg.LogLevel),
+		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)

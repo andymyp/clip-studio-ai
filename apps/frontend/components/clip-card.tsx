@@ -1,4 +1,7 @@
-import { Clock, Sparkle } from "@phosphor-icons/react/dist/ssr";
+import {
+  ClockIcon as Clock,
+  SparkleIcon as Sparkle,
+} from "@phosphor-icons/react/dist/ssr";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";

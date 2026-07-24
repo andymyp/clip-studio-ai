@@ -56,6 +56,17 @@ type analysisResponse struct {
 	Message  string          `json:"message"`
 }
 
+type jobLogResponse struct {
+	ID         uuid.UUID       `json:"id"`
+	VideoID    uuid.UUID       `json:"video_id"`
+	VideoTitle string          `json:"video_title"`
+	Status     model.JobStatus `json:"status"`
+	Progress   float64         `json:"progress"`
+	Message    string          `json:"message"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
+}
+
 func NewHandler(
 	videos *service.Service,
 	logger *zap.Logger,
@@ -130,6 +141,24 @@ func (handler *Handler) AnalyzeVideo(c *gin.Context) {
 		ID: job.ID, VideoID: job.VideoID, Status: job.Status,
 		Progress: job.Progress, Message: job.Message,
 	})
+}
+
+func (handler *Handler) JobLogs(c *gin.Context) {
+	userID, _ := middleware.UserID(c)
+	jobs, err := handler.videos.JobLogs(c.Request.Context(), userID)
+	if err != nil {
+		writeError(c, handler.logger, err)
+		return
+	}
+	response := make([]jobLogResponse, 0, len(jobs))
+	for _, job := range jobs {
+		response = append(response, jobLogResponse{
+			ID: job.ID, VideoID: job.VideoID, VideoTitle: job.Video.Title,
+			Status: job.Status, Progress: job.Progress, Message: job.Message,
+			CreatedAt: job.CreatedAt, UpdatedAt: job.UpdatedAt,
+		})
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func (handler *Handler) parseUUID(c *gin.Context, name string) (uuid.UUID, bool) {

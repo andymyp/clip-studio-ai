@@ -196,6 +196,22 @@ func (repo *AnalysisJobRepository) ListByVideoID(
 	return repo.listBy(ctx, "video_id", videoID, 0, 0)
 }
 
+func (repo *AnalysisJobRepository) ListByUserID(
+	ctx context.Context,
+	userID uuid.UUID,
+	limit int,
+) ([]model.AnalysisJob, error) {
+	var jobs []model.AnalysisJob
+	err := repo.db.WithContext(ctx).
+		Joins("JOIN videos ON videos.id = analysis_jobs.video_id").
+		Where("videos.user_id = ?", userID).
+		Preload("Video").
+		Order("analysis_jobs.created_at DESC").
+		Limit(limit).
+		Find(&jobs).Error
+	return jobs, err
+}
+
 type RenderJobRepository struct {
 	*baseRepository[model.RenderJob]
 }
