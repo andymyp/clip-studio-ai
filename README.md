@@ -9,8 +9,8 @@ has not been implemented yet.
 
 - Frontend: Next.js 16, TypeScript, Tailwind CSS 4, shadcn/ui, TanStack Query,
   and Zustand
-- Backend: Go 1.23, Gin, GORM, PostgreSQL, Redis, Asynq, and SSE
-- Worker: Python 3.12, FastAPI, FFmpeg, yt-dlp, and Faster Whisper
+- Backend: Go 1.26.4, Gin, GORM, PostgreSQL, Redis, Asynq, and SSE
+- Worker: Python 3.14 container runtime, FastAPI, FFmpeg, yt-dlp, and Faster Whisper
 - Infrastructure: Docker Compose, PostgreSQL 16, Redis 7, and Ollama
 - Monorepo tooling: pnpm and Turborepo
 
@@ -37,17 +37,17 @@ clip-studio-ai/
 
 Install the following tools:
 
-- Node.js 20 or later
-- pnpm 10
-- Go 1.23 or later
-- Python 3.12
+- Node.js 24 or later
+- pnpm 11
+- Go 1.26.4 or later
+- Python 3.12-3.14 (Docker uses Python 3.14)
 - Docker Desktop with Docker Compose
 
 Enable the pnpm version declared by the repository:
 
 ```powershell
 corepack enable
-corepack prepare pnpm@10.13.1 --activate
+corepack prepare pnpm@11.17.0 --activate
 ```
 
 ## Environment files

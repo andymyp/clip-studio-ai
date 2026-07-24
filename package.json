@@ -2,9 +2,9 @@
   "name": "clipstudio-ai",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.13.1",
+  "packageManager": "pnpm@11.17.0",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "build": "turbo run build",
@@ -34,8 +34,8 @@
     "db:migrate": "go -C apps/backend run ./cmd/migrate"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0",
-    "prettier": "^3.6.2",
-    "turbo": "^2.5.5"
+    "concurrently": "^10.0.3",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.6"
   }
 }

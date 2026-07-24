@@ -1,27 +1,27 @@
 [build-system]
-requires = ["setuptools>=75"]
+requires = ["setuptools>=83"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "clipstudio-worker"
 version = "0.1.0"
 description = "ClipStudio AI media worker foundation"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12,<3.15"
 dependencies = [
-  "fastapi>=0.116,<1",
-  "uvicorn[standard]>=0.35,<1",
-  "pydantic-settings>=2.10,<3",
-  "redis>=6.2,<7",
-  "yt-dlp>=2025.6.30",
-  "faster-whisper>=1.1,<2",
+  "fastapi>=0.139.2,<1",
+  "uvicorn[standard]>=0.51,<1",
+  "pydantic-settings>=2.14.2,<3",
+  "redis>=8.0.1,<9",
+  "yt-dlp>=2026.7.4",
+  "faster-whisper>=1.2.1,<2",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28,<1",
-  "mypy>=1.16,<2",
-  "pytest>=8.4,<9",
-  "ruff>=0.12,<1",
+  "httpx2>=2.9,<3",
+  "mypy>=2.3,<3",
+  "pytest>=9.1.1,<10",
+  "ruff>=0.16,<1",
 ]
 
 [tool.setuptools.packages.find]
