@@ -25,11 +25,12 @@ type searchQuery struct {
 }
 
 type videoSearchResponse struct {
-	Title     string `json:"title"`
-	URL       string `json:"url"`
-	Thumbnail string `json:"thumbnail"`
-	Views     int64  `json:"views"`
-	Platform  string `json:"platform"`
+	ID        uuid.UUID `json:"id"`
+	Title     string    `json:"title"`
+	URL       string    `json:"url"`
+	Thumbnail string    `json:"thumbnail"`
+	Views     int64     `json:"views"`
+	Platform  string    `json:"platform"`
 }
 
 type videoDetailResponse struct {
@@ -87,6 +88,7 @@ func (handler *Handler) SearchVideos(c *gin.Context) {
 	response := make([]videoSearchResponse, 0, len(videos))
 	for _, video := range videos {
 		response = append(response, videoSearchResponse{
+			ID:    video.ID,
 			Title: video.Title, URL: video.URL, Thumbnail: video.Thumbnail,
 			Views: video.Views, Platform: video.Platform,
 		})

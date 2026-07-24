@@ -7,7 +7,7 @@ backend video and analysis-job APIs, and development tooling.
 ## Technology
 
 - Frontend: Next.js 16, TypeScript, Tailwind CSS 4, shadcn/ui, TanStack Query,
-  and Zustand
+  Axios, Zustand, and BProgress
 - Backend: Go 1.26.4, Gin, GORM, PostgreSQL, Redis, Asynq, and SSE
 - Worker: Python 3.14 container runtime, FastAPI, FFmpeg, yt-dlp, and Faster Whisper
 - Infrastructure: Docker Compose, PostgreSQL 16, Redis 7, and Ollama
@@ -169,6 +169,20 @@ Other combined modes:
 Ollama models are not downloaded automatically. Pull the configured model when
 it is first required.
 
+### Frontend routes
+
+| Route        | Purpose                                      |
+| ------------ | -------------------------------------------- |
+| `/signin`    | JWT login                                    |
+| `/signup`    | Account registration                         |
+| `/dashboard` | Video overview and quick analysis actions    |
+| `/videos`    | Searchable video library                     |
+| `/logs`      | Browser-local authentication and job activity |
+
+Dashboard routes are client-protected and use Axios JWT refresh interceptors.
+TanStack Query manages server state, while Zustand persists the authenticated
+session and local activity history.
+
 ### Backend API
 
 | Method | Endpoint                             | Purpose                              |
@@ -281,6 +295,7 @@ Included:
 - persisted video search and detail endpoints;
 - queued analysis jobs and SSE progress events;
 - JWT registration, login, rotating refresh tokens, and Bearer middleware;
+- responsive sign-in, sign-up, dashboard, videos, and activity-log interfaces;
 - container builds and local orchestration;
 - persistent development storage.
 
@@ -289,7 +304,7 @@ Deferred:
 - uploads and media ingestion;
 - analysis task processing;
 - transcription and AI pipelines;
-- prompts and product user interfaces.
+- prompt management and clip editing interfaces.
 
 See [docs/architecture.md](docs/architecture.md) for the intended service
 boundaries and data flow. See [docs/database.md](docs/database.md) for tables,
