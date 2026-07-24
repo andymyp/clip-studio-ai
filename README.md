@@ -98,12 +98,8 @@ The command:
 - creates `worker/.venv`;
 - installs Python worker and development dependencies.
 
-Activate the Python environment in the terminal used to run development
-commands:
-
-```powershell
-.\worker\.venv\Scripts\Activate.ps1
-```
+The worker commands call `worker/.venv/Scripts/python.exe` directly, so manual
+virtual-environment activation is not required.
 
 ### 2. Start development
 
@@ -213,7 +209,7 @@ Redis, and Ollama volume data.
 | `pnpm check`     | Run linting, type checks, and all tests |
 | `pnpm format`    | Format supported repository files       |
 
-Run Python-related commands with `worker/.venv` activated.
+Python-related package scripts use `worker/.venv` automatically.
 
 ## Current scope
 
