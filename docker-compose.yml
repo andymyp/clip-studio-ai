@@ -62,7 +62,7 @@ services:
   worker:
     <<: *service-defaults
     build:
-      context: ./worker
+      context: ./apps/worker
       dockerfile: Dockerfile
     container_name: clipstudio_worker
     env_file:
@@ -88,7 +88,7 @@ services:
   backend:
     <<: *service-defaults
     build:
-      context: ./backend
+      context: ./apps/backend
       dockerfile: Dockerfile
     container_name: clipstudio_backend
     env_file:
@@ -117,7 +117,7 @@ services:
   frontend:
     <<: *service-defaults
     build:
-      context: ./frontend
+      context: ./apps/frontend
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}

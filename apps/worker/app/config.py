@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     storage_path: str = "./storage"
     whisper_model: str = "small"
 
-    # Support running from either the repository root or the worker directory.
+    # Support running from the repository root or apps/worker directory.
     model_config = SettingsConfigDict(
-        env_file=(".env.worker", "../.env.worker"),
+        env_file=(".env.worker", "../.env.worker", "../../.env.worker"),
         extra="ignore",
     )
 

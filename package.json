@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.13.1",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.9.0"
   },
   "scripts": {
     "build": "turbo run build",
@@ -12,15 +12,15 @@
     "dev:all": "pnpm infra:up && pnpm dev",
     "dev:full": "concurrently --kill-others-on-fail --names frontend,backend,worker-api,worker-jobs --prefix-colors cyan,green,magenta,yellow \"pnpm dev:frontend\" \"pnpm dev:backend\" \"pnpm dev:worker-api\" \"pnpm dev:worker-jobs\"",
     "dev:frontend": "pnpm --filter @clipstudio/frontend dev",
-    "dev:backend": "go -C backend run ./cmd/api",
-    "dev:worker-api": "worker\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --app-dir worker --reload --port 3002",
-    "dev:worker-jobs": "worker\\.venv\\Scripts\\python.exe -m worker.app.worker",
+    "dev:backend": "go -C apps/backend run ./cmd/api",
+    "dev:worker-api": "apps\\worker\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --app-dir apps/worker --reload --port 3002",
+    "dev:worker-jobs": "apps\\worker\\.venv\\Scripts\\python.exe -m apps.worker.app.worker",
     "bootstrap": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "pnpm test:backend && pnpm test:worker",
-    "test:backend": "go -C backend test ./...",
-    "test:worker": "worker\\.venv\\Scripts\\python.exe -m pytest --rootdir worker worker/tests",
+    "test:backend": "go -C apps/backend test ./...",
+    "test:worker": "cd apps\\worker && .venv\\Scripts\\python.exe -m pytest tests",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "format": "prettier --write .",
     "infra:up": "docker compose --env-file .env.root up -d postgres redis ollama",
@@ -31,7 +31,7 @@
     "docker:build": "docker compose --env-file .env.root build",
     "docker:logs": "docker compose --env-file .env.root logs --follow",
     "docker:ps": "docker compose --env-file .env.root ps",
-    "db:migrate": "go -C backend run ./cmd/migrate"
+    "db:migrate": "go -C apps/backend run ./cmd/migrate"
   },
   "devDependencies": {
     "concurrently": "^9.2.0",

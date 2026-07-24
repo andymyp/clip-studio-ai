@@ -23,6 +23,7 @@ func Load() Config {
 	// Support running from either the repository root or the backend directory.
 	_ = godotenv.Load(".env.be")
 	_ = godotenv.Load("../.env.be")
+	_ = godotenv.Load("../../.env.be")
 
 	return Config{
 		Environment: env("APP_ENV", "development"),

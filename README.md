@@ -7,7 +7,7 @@ has not been implemented yet.
 
 ## Technology
 
-- Frontend: Next.js 15, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query,
+- Frontend: Next.js 16, TypeScript, Tailwind CSS 4, shadcn/ui, TanStack Query,
   and Zustand
 - Backend: Go 1.23, Gin, GORM, PostgreSQL, Redis, Asynq, and SSE
 - Worker: Python 3.12, FastAPI, FFmpeg, yt-dlp, and Faster Whisper
@@ -18,10 +18,10 @@ has not been implemented yet.
 
 ```text
 clip-studio-ai/
-|-- frontend/           Next.js application and Dockerfile
-|-- backend/            Go API and Dockerfile
-|-- worker/             Python API, background worker, and Dockerfile
-|-- docker/             Docker documentation
+|-- apps/
+|   |-- frontend/       Next.js application and Dockerfile
+|   |-- backend/        Go API and Dockerfile
+|   `-- worker/         Python API, background worker, and Dockerfile
 |-- storage/
 |   |-- input/          Source media
 |   |-- output/         Generated media
@@ -95,11 +95,11 @@ The command:
 - creates missing environment files;
 - installs JavaScript dependencies;
 - downloads Go modules;
-- creates `worker/.venv`;
+- creates `apps/worker/.venv`;
 - installs Python worker and development dependencies.
 
-The worker commands call `worker/.venv/Scripts/python.exe` directly, so manual
-virtual-environment activation is not required.
+The worker commands call `apps/worker/.venv/Scripts/python.exe` directly, so
+manual virtual-environment activation is not required.
 
 ### 2. Start development
 
@@ -210,7 +210,7 @@ Redis, and Ollama volume data.
 | `pnpm check`     | Run linting, type checks, and all tests |
 | `pnpm format`    | Format supported repository files       |
 
-Python-related package scripts use `worker/.venv` automatically.
+Python-related package scripts use `apps/worker/.venv` automatically.
 
 ## Current scope
 

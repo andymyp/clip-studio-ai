@@ -160,11 +160,11 @@ env/
 htmlcov/
 
 # ClipStudio AI: Go backend
-backend/bin/
-backend/tmp/
-backend/coverage.out
-backend/*.exe
-backend/api
+apps/backend/bin/
+apps/backend/tmp/
+apps/backend/coverage.out
+apps/backend/*.exe
+apps/backend/api
 
 # ClipStudio AI: generated media
 storage/input/*
