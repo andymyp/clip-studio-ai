@@ -1,9 +1,8 @@
 # ClipStudio AI
 
 ClipStudio AI is a monorepo foundation for an AI-assisted video clipping
-platform. It currently provides service boundaries, dependency wiring,
-containers, health endpoints, and development tooling. Product business logic
-has not been implemented yet.
+platform. It provides service boundaries, dependency wiring, containers,
+backend video and analysis-job APIs, and development tooling.
 
 ## Technology
 
@@ -20,7 +19,17 @@ has not been implemented yet.
 clip-studio-ai/
 |-- apps/
 |   |-- frontend/       Next.js application and Dockerfile
-|   |-- backend/        Go API and Dockerfile
+|   |-- backend/
+|   |   |-- cmd/        API and migration entry points
+|   |   |-- internal/
+|   |   |   |-- api/          HTTP handlers, routing, and app wiring
+|   |   |   |-- service/      Application use cases
+|   |   |   |-- repository/   PostgreSQL, GORM, and data contracts
+|   |   |   |-- model/        Persistent domain models
+|   |   |   |-- middleware/   Gin request middleware
+|   |   |   |-- queue/        Asynq tasks and client setup
+|   |   |   `-- sse/          Job progress event streams
+|   |   `-- Dockerfile
 |   `-- worker/         Python API, background worker, and Dockerfile
 |-- storage/
 |   |-- input/          Source media
@@ -160,6 +169,32 @@ Other combined modes:
 Ollama models are not downloaded automatically. Pull the configured model when
 it is first required.
 
+### Backend API
+
+| Method | Endpoint                             | Purpose                              |
+| ------ | ------------------------------------ | ------------------------------------ |
+| GET    | `/health`                            | Service health                       |
+| GET    | `/api/videos/search?keyword=podcast` | Search persisted videos              |
+| GET    | `/api/videos/:id`                    | Get video metadata                   |
+| POST   | `/api/videos/:id/analyze`            | Create and enqueue an analysis job   |
+| GET    | `/api/jobs/:id/events`               | Stream analysis progress using SSE   |
+
+Analysis requests return HTTP `202 Accepted`. The queued task type is
+`video:analyze`; its JSON payload contains `job_id` and `video_id`. Run
+`pnpm dev:worker-jobs` alongside the API when a task consumer is available.
+
+SSE messages use the job status as the event name and send progress as JSON:
+
+```text
+event:queued
+data:{"step":"queued","percentage":0}
+```
+
+The backend handles `SIGINT` and `SIGTERM` gracefully. It stops accepting new
+requests, drains active requests for `SHUTDOWN_TIMEOUT` (10 seconds by
+default), then closes its Asynq, Redis, and PostgreSQL connections. Docker
+Compose allows a 15-second grace period before forcing the container to stop.
+
 ## Full Docker stack
 
 After creating the environment files with `pnpm bootstrap`, build and start all six
@@ -220,16 +255,16 @@ Included:
 - configuration loading;
 - infrastructure clients;
 - health endpoints;
-- SSE foundation;
+- persisted video search and detail endpoints;
+- queued analysis jobs and SSE progress events;
 - container builds and local orchestration;
 - persistent development storage.
 
 Deferred:
 
 - authentication and authorization;
-- database models and migrations;
 - uploads and media ingestion;
-- job contracts and processing workflows;
+- analysis task processing;
 - transcription and AI pipelines;
 - prompts and product user interfaces.
 

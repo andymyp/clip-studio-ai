@@ -17,6 +17,20 @@ The frontend calls the Go API. The API persists metadata in PostgreSQL, publishe
 
 The backend and Python worker deliberately have separate queues at this foundation stage: Asynq establishes the Go-side async boundary, while the Python package supplies a Celery-style Redis consumer. A production job contract and bridge should be selected before business implementation.
 
+## Backend packages
+
+The Go backend uses a feature-oriented internal package layout:
+
+| Package | Responsibility |
+| --- | --- |
+| `internal/api` | Gin routes, request/response handlers, configuration, and dependency wiring |
+| `internal/service` | Video use cases and analysis orchestration |
+| `internal/repository` | Repository contracts, GORM implementations, PostgreSQL setup, and migrations |
+| `internal/model` | Persistent entities and lifecycle states |
+| `internal/middleware` | Request IDs, Zap access logs, and panic recovery |
+| `internal/queue` | Asynq client setup and typed task payloads |
+| `internal/sse` | Analysis-job event streaming |
+
 ## Storage
 
 `storage/input`, `storage/output`, and `storage/temp` are mounted into services at `/app/storage`. Production deployments should replace this local filesystem contract with durable object storage or a managed shared volume.

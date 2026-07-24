@@ -1,11 +1,10 @@
-package gormrepo
+package repository
 
 import (
 	"context"
 	"errors"
 
-	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/domain/model"
-	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/domain/repository"
+	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -40,7 +39,7 @@ func (repo *baseRepository[T]) Update(ctx context.Context, entity *T) error {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return repository.ErrNotFound
+		return ErrNotFound
 	}
 	return nil
 }
@@ -52,7 +51,7 @@ func (repo *baseRepository[T]) Delete(ctx context.Context, id uuid.UUID) error {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return repository.ErrNotFound
+		return ErrNotFound
 	}
 	return nil
 }
@@ -82,7 +81,7 @@ func (repo *baseRepository[T]) listBy(
 
 func translateError(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return repository.ErrNotFound
+		return ErrNotFound
 	}
 	return err
 }
@@ -105,6 +104,21 @@ type VideoRepository struct{ *baseRepository[model.Video] }
 
 func (repo *VideoRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Video, error) {
 	return repo.getByID(ctx, id)
+}
+
+func (repo *VideoRepository) Search(
+	ctx context.Context,
+	keyword string,
+	limit int,
+) ([]model.Video, error) {
+	var videos []model.Video
+	pattern := "%" + keyword + "%"
+	err := repo.db.WithContext(ctx).
+		Where("title ILIKE ? OR description ILIKE ?", pattern, pattern).
+		Order("views DESC, created_at DESC").
+		Limit(limit).
+		Find(&videos).Error
+	return videos, err
 }
 
 func (repo *VideoRepository) ListByUserID(
@@ -202,13 +216,13 @@ func (repo *WatermarkRepository) ListByUserID(
 }
 
 type Repositories struct {
-	Users        repository.UserRepository
-	Videos       repository.VideoRepository
-	Clips        repository.ClipRepository
-	AnalysisJobs repository.AnalysisJobRepository
-	RenderJobs   repository.RenderJobRepository
-	Subtitles    repository.SubtitleRepository
-	Watermarks   repository.WatermarkRepository
+	Users        UserRepositoryContract
+	Videos       VideoRepositoryContract
+	Clips        ClipRepositoryContract
+	AnalysisJobs AnalysisJobRepositoryContract
+	RenderJobs   RenderJobRepositoryContract
+	Subtitles    SubtitleRepositoryContract
+	Watermarks   WatermarkRepositoryContract
 }
 
 func New(db *gorm.DB) *Repositories {

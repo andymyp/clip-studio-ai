@@ -87,6 +87,7 @@ services:
 
   backend:
     <<: *service-defaults
+    stop_grace_period: 15s
     build:
       context: ./apps/backend
       dockerfile: Dockerfile

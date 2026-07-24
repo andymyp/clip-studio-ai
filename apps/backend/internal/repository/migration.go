@@ -1,17 +1,21 @@
-package migrations
+package repository
 
 import (
 	"fmt"
 
-	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/domain/model"
+	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-// Up applies additive schema changes in dependency order. GORM records no
+// Migrate applies additive schema changes in dependency order. GORM records no
 // migration history, so destructive changes must be introduced as explicit,
 // versioned migrations in future releases.
-func Up(db *gorm.DB) error {
-	err := db.Transaction(func(tx *gorm.DB) error {
+func Migrate(db *gorm.DB) error {
+	quietDB := db.Session(&gorm.Session{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	err := quietDB.Transaction(func(tx *gorm.DB) error {
 		return tx.AutoMigrate(
 			&model.User{},
 			&model.Video{},

@@ -1,4 +1,4 @@
-package config
+package api
 
 import (
 	"os"
@@ -9,31 +9,35 @@ import (
 )
 
 type Config struct {
-	Environment string
-	Port        string
-	DatabaseURL string
-	RedisAddr   string
-	AutoMigrate bool
-	DBMaxOpen   int
-	DBMaxIdle   int
-	DBMaxLife   time.Duration
+	Environment     string
+	Port            string
+	DatabaseURL     string
+	RedisAddr       string
+	AsynqQueue      string
+	AutoMigrate     bool
+	DBMaxOpen       int
+	DBMaxIdle       int
+	DBMaxLife       time.Duration
+	ShutdownTimeout time.Duration
 }
 
-func Load() Config {
+func LoadConfig() Config {
 	// Support running from either the repository root or the backend directory.
 	_ = godotenv.Load(".env.be")
 	_ = godotenv.Load("../.env.be")
 	_ = godotenv.Load("../../.env.be")
 
 	return Config{
-		Environment: env("APP_ENV", "development"),
-		Port:        env("PORT", "3001"),
-		DatabaseURL: env("DATABASE_URL", "postgres://clipstudio:clipstudio@localhost:5432/clipstudio?sslmode=disable"),
-		RedisAddr:   env("REDIS_ADDR", "localhost:6379"),
-		AutoMigrate: envBool("AUTO_MIGRATE", true),
-		DBMaxOpen:   envInt("DB_MAX_OPEN_CONNS", 25),
-		DBMaxIdle:   envInt("DB_MAX_IDLE_CONNS", 10),
-		DBMaxLife:   envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
+		Environment:     env("APP_ENV", "development"),
+		Port:            env("PORT", "3001"),
+		DatabaseURL:     env("DATABASE_URL", "postgres://clipstudio:clipstudio@localhost:5432/clipstudio?sslmode=disable"),
+		RedisAddr:       env("REDIS_ADDR", "localhost:6379"),
+		AsynqQueue:      env("ASYNQ_QUEUE", "default"),
+		AutoMigrate:     envBool("AUTO_MIGRATE", true),
+		DBMaxOpen:       envInt("DB_MAX_OPEN_CONNS", 25),
+		DBMaxIdle:       envInt("DB_MAX_IDLE_CONNS", 10),
+		DBMaxLife:       envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
+		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
 	}
 }
 
