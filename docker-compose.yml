@@ -1,32 +1,106 @@
 name: clipstudio-ai
 
+x-app-environment: &app-environment
+  APP_ENV: ${APP_ENV:-development}
+  STORAGE_PATH: /app/storage
+
+x-service-defaults: &service-defaults
+  init: true
+  restart: unless-stopped
+  networks:
+    - clipstudio
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 10s
+
 services:
-  frontend:
-    build:
-      context: .
-      dockerfile: docker/frontend.Dockerfile
+  postgres:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: clipstudio_postgres
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+      POSTGRES_USER: ${POSTGRES_USER:-clipstudio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clipstudio}
+      POSTGRES_DB: clipstudio
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d clipstudio"]
+
+  redis:
+    <<: *service-defaults
+    image: redis:7-alpine
+    container_name: clipstudio_redis
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "ping"]
+
+  ollama:
+    <<: *service-defaults
+    image: ollama/ollama:latest
+    container_name: clipstudio_ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "ollama", "list"]
+      start_period: 20s
+
+  worker:
+    <<: *service-defaults
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: clipstudio_worker
+    env_file:
+      - .env.worker
+    environment:
+      <<: *app-environment
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_HOST: http://ollama:11434
+    ports:
+      - "${WORKER_API_PORT:-3002}:3002"
+    volumes:
+      - ./storage:/app/storage
     depends_on:
-      backend:
+      redis:
         condition: service_healthy
-    restart: unless-stopped
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3002/health"]
+      start_period: 20s
 
   backend:
+    <<: *service-defaults
     build:
-      context: .
-      dockerfile: docker/backend.Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: clipstudio_backend
+    env_file:
+      - .env.be
     environment:
-      APP_ENV: ${APP_ENV:-development}
-      PORT: "8080"
-      DATABASE_URL: ${DATABASE_URL:-postgres://clipstudio:clipstudio@postgres:5432/clipstudio?sslmode=disable}
-      REDIS_ADDR: ${REDIS_ADDR:-redis:6379}
-      WORKER_API_URL: ${WORKER_API_URL:-http://worker-api:8000}
-      STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
+      <<: *app-environment
+      PORT: "3001"
+      DATABASE_URL: postgres://${POSTGRES_USER:-clipstudio}:${POSTGRES_PASSWORD:-clipstudio}@postgres:5432/clipstudio?sslmode=disable
+      REDIS_ADDR: redis:6379
+      WORKER_API_URL: http://worker:3002
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_PORT:-3001}:3001"
     volumes:
       - ./storage:/app/storage
     depends_on:
@@ -34,97 +108,45 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      worker-api:
+      worker:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
 
-  worker-api:
+  frontend:
+    <<: *service-defaults
     build:
-      context: .
-      dockerfile: docker/worker.Dockerfile
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-    environment: &worker-environment
-      APP_ENV: ${APP_ENV:-development}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
-      STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
-      WHISPER_MODEL: ${WHISPER_MODEL:-small}
-    ports:
-      - "${WORKER_API_PORT:-8000}:8000"
-    volumes:
-      - ./storage:/app/storage
-    depends_on:
-      redis:
-        condition: service_healthy
-      ollama:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  worker:
-    build:
-      context: .
-      dockerfile: docker/worker.Dockerfile
-    command: ["python", "-m", "app.worker"]
-    environment: *worker-environment
-    volumes:
-      - ./storage:/app/storage
-    depends_on:
-      redis:
-        condition: service_healthy
-      ollama:
-        condition: service_started
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:16-alpine
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    container_name: clipstudio_frontend
+    env_file:
+      - .env.fe
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-clipstudio}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clipstudio}
-      POSTGRES_DB: ${POSTGRES_DB:-clipstudio}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      start_period: 20s
 
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: unless-stopped
+networks:
+  clipstudio:
+    name: clipstudio-network
+    driver: bridge
 
 volumes:
   postgres_data:
+    name: clipstudio-postgres-data
   redis_data:
+    name: clipstudio-redis-data
   ollama_data:
+    name: clipstudio-ollama-data

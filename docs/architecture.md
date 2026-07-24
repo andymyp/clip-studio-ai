@@ -6,8 +6,7 @@
 | --- | --- |
 | `frontend` | Browser UI and API consumption |
 | `backend` | Public API, persistence coordination, SSE streams, and Asynq job production |
-| `worker-api` | Internal Python capability/health API |
-| `worker` | Redis-backed media processing consumer |
+| `worker` | Internal Python capability API and media worker foundation |
 | `postgres` | Durable application metadata |
 | `redis` | Asynq jobs, worker queues, caching, and ephemeral coordination |
 | `ollama` | Local language-model inference |
@@ -21,6 +20,18 @@ The backend and Python worker deliberately have separate queues at this foundati
 ## Storage
 
 `storage/input`, `storage/output`, and `storage/temp` are mounted into services at `/app/storage`. Production deployments should replace this local filesystem contract with durable object storage or a managed shared volume.
+
+## Configuration ownership
+
+- `.env.root` controls Compose host ports and infrastructure credentials.
+- `.env.fe` contains browser-safe Next.js configuration.
+- `.env.be` contains Go API configuration and internal service addresses.
+- `.env.worker` is shared by the Python API and background worker processes.
+
+Only the corresponding `.example` templates are committed. PostgreSQL credentials in
+`.env.root` and the backend `DATABASE_URL` must remain aligned. Application templates
+use `localhost` for terminal-first development; Compose overrides internal addresses
+with Docker DNS service names.
 
 ## Security notes
 

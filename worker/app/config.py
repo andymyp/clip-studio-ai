@@ -10,7 +10,11 @@ class Settings(BaseSettings):
     storage_path: str = "./storage"
     whisper_model: str = "small"
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Support running from either the repository root or the worker directory.
+    model_config = SettingsConfigDict(
+        env_file=(".env.worker", "../.env.worker"),
+        extra="ignore",
+    )
 
 
 @lru_cache

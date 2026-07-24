@@ -1,0 +1,27 @@
+# Build output
+bin/
+tmp/
+dist/
+coverage/
+coverage.out
+*.test
+*.exe
+api
+
+# Local environment and logs
+.env
+.env.*
+!.env.*.example
+*.log
+
+# Tool and editor metadata
+.cache/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Repository-only files
+.git/
+.gitignore
+README*
