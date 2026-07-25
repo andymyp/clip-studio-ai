@@ -1,0 +1,44 @@
+# The current Compose services use service-local build contexts and
+# service-local .dockerignore files. These rules protect the repository root
+# if it is used as a Docker build context in the future.
+
+.git/
+.github/
+.vscode/
+.idea/
+
+.env
+.env.*
+!.env.*.example
+
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+.turbo/
+.cache/
+
+.venv/
+**/.venv/
+venv/
+**/venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+**/*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+coverage/
+**/coverage/
+*.log
+*.tsbuildinfo
+
+storage/input/*
+storage/output/*
+storage/temp/*
+!storage/input/.gitkeep
+!storage/output/.gitkeep
+!storage/temp/.gitkeep

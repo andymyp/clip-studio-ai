@@ -1,0 +1,39 @@
+# Python environments and package artifacts
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environment, data, and logs
+.env
+.env.*
+!.env.*.example
+storage/
+*.log
+
+# Tests and local tooling
+tests/
+.cache/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Repository-only files
+.git/
+.gitignore
+README*

@@ -1,0 +1,41 @@
+{
+  "name": "clipstudio-ai",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "concurrently --kill-others-on-fail --names frontend,backend,worker-api,worker-jobs --prefix-colors cyan,green,magenta,yellow \"pnpm dev:frontend\" \"pnpm dev:backend\" \"pnpm dev:worker-api\" \"pnpm dev:worker-jobs\"",
+    "dev:all": "pnpm infra:up && pnpm dev",
+    "dev:full": "pnpm dev",
+    "dev:frontend": "pnpm --filter @clipstudio/frontend dev",
+    "dev:backend": "go -C apps/backend run ./cmd/api",
+    "dev:worker-api": "apps\\worker\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --app-dir apps/worker --reload --port 3002",
+    "dev:worker-jobs": "cd apps\\worker && .venv\\Scripts\\python.exe -m app.worker",
+    "bootstrap": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "pnpm test:backend && pnpm test:worker",
+    "test:backend": "go -C apps/backend test ./...",
+    "test:worker": "cd apps\\worker && .venv\\Scripts\\python.exe -m pytest tests",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "format": "prettier --write .",
+    "infra:up": "docker compose --env-file .env.root up -d postgres redis ollama",
+    "infra:down": "docker compose --env-file .env.root stop postgres redis ollama",
+    "docker:up": "docker compose --env-file .env.root up --build -d",
+    "docker:down": "docker compose --env-file .env.root down",
+    "docker:down:volumes": "docker compose --env-file .env.root down --volumes",
+    "docker:build": "docker compose --env-file .env.root build",
+    "docker:logs": "docker compose --env-file .env.root logs --follow",
+    "docker:ps": "docker compose --env-file .env.root ps",
+    "db:migrate": "go -C apps/backend run ./cmd/migrate"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.6"
+  }
+}

@@ -1,0 +1,187 @@
+name: clipstudio-ai
+
+x-app-environment: &app-environment
+  APP_ENV: ${APP_ENV:-development}
+  STORAGE_PATH: /app/storage
+
+x-service-defaults: &service-defaults
+  init: true
+  restart: unless-stopped
+  networks:
+    - clipstudio
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 10s
+
+services:
+  postgres:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: clipstudio_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clipstudio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clipstudio}
+      POSTGRES_DB: clipstudio
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d clipstudio"]
+
+  redis:
+    <<: *service-defaults
+    image: redis:7-alpine
+    container_name: clipstudio_redis
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "ping"]
+
+  ollama:
+    <<: *service-defaults
+    image: ollama/ollama:latest
+    container_name: clipstudio_ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "ollama", "list"]
+      start_period: 20s
+
+  worker:
+    <<: *service-defaults
+    stop_grace_period: 30s
+    build:
+      context: ./apps/worker
+      dockerfile: Dockerfile
+    container_name: clipstudio_worker
+    env_file:
+      - .env.worker
+    environment:
+      <<: *app-environment
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_HOST: http://ollama:11434
+    ports:
+      - "${WORKER_API_PORT:-3002}:3002"
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3002/health"]
+      start_period: 20s
+
+  worker-jobs:
+    <<: *service-defaults
+    stop_grace_period: 15m
+    build:
+      context: ./apps/worker
+      dockerfile: Dockerfile
+    container_name: clipstudio_worker_jobs
+    command: ["python", "-m", "app.worker"]
+    env_file:
+      - .env.worker
+    environment:
+      <<: *app-environment
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_HOST: http://ollama:11434
+      YTDLP_COOKIE_FILE: /run/secrets/youtube_cookies
+    secrets:
+      - youtube_cookies
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+
+  backend:
+    <<: *service-defaults
+    stop_grace_period: 15s
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: clipstudio_backend
+    env_file:
+      - .env.be
+    environment:
+      <<: *app-environment
+      PORT: "3001"
+      DATABASE_URL: postgres://${POSTGRES_USER:-clipstudio}:${POSTGRES_PASSWORD:-clipstudio}@postgres:5432/clipstudio?sslmode=disable
+      REDIS_ADDR: redis:6379
+      WORKER_API_URL: http://worker:3002
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+      worker-jobs:
+        condition: service_started
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+
+  frontend:
+    <<: *service-defaults
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_WORKER_URL: ${NEXT_PUBLIC_WORKER_URL:-http://localhost:3002}
+    container_name: clipstudio_frontend
+    env_file:
+      - .env.fe
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      NEXT_PUBLIC_WORKER_URL: ${NEXT_PUBLIC_WORKER_URL:-http://localhost:3002}
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      start_period: 20s
+
+networks:
+  clipstudio:
+    name: clipstudio-network
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: clipstudio-postgres-data
+  redis_data:
+    name: clipstudio-redis-data
+  ollama_data:
+    name: clipstudio-ollama-data
+
+secrets:
+  youtube_cookies:
+    file: ${YTDLP_COOKIE_FILE_HOST:-./storage/secrets/youtube-cookies.txt}

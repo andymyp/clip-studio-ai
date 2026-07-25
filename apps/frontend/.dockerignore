@@ -1,0 +1,37 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local environment files
+.env
+.env.*
+!.env.*.example
+
+# Tool caches and logs
+.turbo/
+.cache/
+.eslintcache
+.npm/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Tests and local tooling
+__tests__/
+playwright-report/
+test-results/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Repository-only files
+.git/
+.gitignore
+README*

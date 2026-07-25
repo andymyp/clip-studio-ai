@@ -1,0 +1,9 @@
+packages:
+  - apps/frontend
+
+# This repository intentionally tracks current stable releases.
+minimumReleaseAge: 0
+
+allowBuilds:
+  sharp: true
+  unrs-resolver: true

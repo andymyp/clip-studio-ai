@@ -1,5 +1,5 @@
 # Logs
-logs
+/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -78,6 +78,10 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+.env.root
+.env.be
+.env.fe
+.env.worker
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -103,6 +107,7 @@ dist
 # vuepress v2.x temp and cache directory
 .temp
 .cache
+.tmp
 
 # vitepress build output
 **/.vitepress/dist
@@ -134,3 +139,53 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# ClipStudio AI: local environment files
+.env.*
+!.env.*.example
+
+# ClipStudio AI: Python worker
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ClipStudio AI: Go backend
+apps/backend/bin/
+apps/backend/tmp/
+apps/backend/coverage.out
+apps/backend/*.exe
+apps/backend/api
+
+# ClipStudio AI: generated media
+storage/secrets/*
+!storage/secrets/.gitkeep
+storage/input/*
+storage/output/*
+storage/temp/*
+!storage/input/.gitkeep
+!storage/output/.gitkeep
+!storage/temp/.gitkeep
+apps/worker/storage/*
+
+# ClipStudio AI: local tooling
+.turbo/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Local Docker Compose customization
+docker-compose.override.yml
