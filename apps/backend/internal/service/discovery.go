@@ -134,9 +134,9 @@ func (service *DiscoveryService) discoverProviders(
 }
 
 func discoveryCacheKey(keyword, rawURL string) string {
-	value := strings.ToLower(strings.TrimSpace(keyword)) + "\x00" + strings.TrimSpace(rawURL)
+	value := "v3\x00" + strings.ToLower(strings.TrimSpace(keyword)) + "\x00" + strings.TrimSpace(rawURL)
 	hash := sha256.Sum256([]byte(value))
-	return fmt.Sprintf("discovery:v4:%x", hash)
+	return fmt.Sprintf("discovery:%x", hash)
 }
 
 func (service *DiscoveryService) resolve(

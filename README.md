@@ -10,7 +10,7 @@ worker tooling, and local or containerized development workflows.
 - Frontend: Next.js 16, TypeScript, Tailwind CSS 4, shadcn/ui, TanStack Query,
   Axios, Zustand, React Hook Form, Zod, Sonner, and BProgress
 - Backend: Go 1.26.4, Gin, GORM, PostgreSQL, Redis, Asynq, and SSE
-- Worker: Python 3.14 container runtime, FastAPI, Redis, FFmpeg, yt-dlp, and
+- Worker: Python 3.12+, FastAPI, Redis, FFmpeg, yt-dlp, Ollama, and
   Ollama (`qwen2.5:7b`)
 - Infrastructure: Docker Compose, PostgreSQL 16, Redis 7, and Ollama
 - Monorepo tooling: pnpm and Turborepo
@@ -211,6 +211,12 @@ pnpm dev:all
 Press `Ctrl+C` to stop the attached application processes. Stop the
 infrastructure containers separately:
 
+The background worker handles `SIGINT` and `SIGTERM` gracefully: it stops
+claiming jobs, returns any unstarted claimed job to Redis, finishes the active
+job, acknowledges it, and closes both Redis connections. Docker allows up to
+15 minutes for an active FFmpeg render to finish before force-stopping the job
+container. Interrupted queue entries are recovered automatically at startup.
+
 ```powershell
 pnpm infra:down
 ```
@@ -304,7 +310,7 @@ contexts. Never commit, bake into an image, log, or share the cookie file.
 | `/clips`                 | Searchable generated-clips library       |
 | `/clips/trending-videos` | YouTube and Reddit discovery results     |
 | `/clips/review/:externalId` | Cached clip preview and multi-select    |
-| `/logs`                  | Backend clip-analysis queue status       |
+| `/logs`                  | Persisted render jobs, progress, and retry |
 
 Dashboard routes are client-protected and use Axios JWT refresh interceptors.
 TanStack Query manages discovery results and backend queue logs, while Zustand
@@ -402,7 +408,7 @@ and opens its progress page.
 
 ### Transcript and clip pipeline
 
-The Python worker processes a queued YouTube video in three stages:
+The Python worker first analyzes a queued YouTube video:
 
 1. `TranscriptService` invokes yt-dlp with `--skip-download`,
    `--write-auto-subs`, and `--write-subs`. It requests English VTT subtitles
@@ -436,10 +442,41 @@ media. Failed analysis jobs are not cached; their transcript JSON and entire
 per-job clip directory are deleted before the failed state is published.
 
 The review page receives job updates over an authenticated SSE stream, previews
-every generated partial clip, and
-allows multiple candidates to be selected. The **Render selected** control
-records the intended selection in the UI only; rendering is deliberately not
-implemented yet.
+every generated partial clip, and allows multiple candidates to be selected.
+The **Render selected** control opens the render options dialog.
+Submitting selected candidates creates one PostgreSQL render job per clip. The
+worker generates word-timed ASS subtitles, burns them into a 9:16 H.264/AAC
+video with watermark and source attribution, then asks Ollama for a title,
+description, and hashtags. Progress is persisted through the backend, failed
+jobs can be retried from `/logs`, and completed exports appear on `/clips`.
+
+Each render produces one best-potential master cut. Before encoding, the worker
+detects and removes dead air and filler-only segments, samples the dominant face
+for speaker-aware vertical reframing, inserts subtle visual beats, generates a
+truthful opening hook, and emphasizes important phrases in the ASS captions.
+Review sections request the best compatible source up to 1080p. Final exports
+use Lanczos scaling, eased subject-following pans, short safe-area captions,
+larger boxed branding, the discovered YouTube handle, and high-quality H.264
+CRF 17 / AAC 192 kbps encoding.
+Ranked moments include a two-second context lead-in and a 1.2-second context
+tail. The renderer preserves those frames, mutes audio in both edge buffers,
+shows a large, outlined, subtitle-style hook in the center without a background
+during the opening, suppresses closing
+captions, and uses a single-line `Source: YT @handle` badge. Caption sanitation
+keeps letters, numbers, whitespace, and standard punctuation while removing
+emoji, currency marks, arrows, and other symbols.
+Dialogue above the readability threshold is adaptively slowed toward three
+words per second, with a conservative 0.85x limit. Video, audio, captions,
+opening hook, and silent edge buffers are retimed together so synchronization
+is preserved; naturally paced dialogue remains at its original speed.
+Published view, engagement, watch-time, and completion metrics can be recorded
+from the clip preview. These produce a viral score and teach later analyses the
+duration range that has performed best.
+
+The background worker handles `SIGINT` and `SIGTERM` gracefully: it stops
+dequeueing new work, finishes and acknowledges the active job, closes Redis,
+and recovers jobs left in processing queues on the next startup. Docker grants
+render workers up to 15 minutes to finish an active FFmpeg render.
 
 SSE messages use the job status as the event name and send progress as JSON:
 
@@ -529,8 +566,8 @@ Included:
 Deferred:
 
 - uploads and media ingestion;
-- render processing and final 9:16 composition;
-- persisting worker clip candidates into PostgreSQL;
+- a timeline editor and manual subtitle corrections;
+- direct publishing integrations for supported social platforms;
 - prompt management and clip editing interfaces.
 
 See [docs/architecture.md](docs/architecture.md) for the intended service

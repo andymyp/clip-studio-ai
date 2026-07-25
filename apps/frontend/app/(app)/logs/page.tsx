@@ -1,141 +1,129 @@
 "use client";
 
 import {
-  CheckCircleIcon as CheckCircle,
-  CircleNotchIcon as CircleNotch,
-  ClockCounterClockwiseIcon as ClockCounterClockwise,
-  ClockIcon as Clock,
-  WarningCircleIcon as WarningCircle,
-  XCircleIcon as XCircle,
+  ArrowClockwiseIcon,
+  CircleNotchIcon,
+  ClockCounterClockwiseIcon,
 } from "@phosphor-icons/react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { PageHeading } from "@/components/page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useJobLogs } from "@/hooks/queries/use-job-logs";
-import type { JobLog } from "@/lib/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useRetryRender } from "@/hooks/mutations/use-retry-render";
+import { useRenderJobs } from "@/hooks/queries/use-render-jobs";
+import { useRenderJobEvents } from "@/hooks/sse/use-render-job-events";
+import { apiErrorMessage } from "@/lib/api";
 
-const statusMeta: Record<
-  JobLog["status"],
-  { icon: typeof CheckCircle; className: string; label: string }
-> = {
-  queued: {
-    icon: Clock,
-    className: "border-amber-200 bg-amber-50 text-amber-700",
-    label: "Queued",
-  },
-  pending: {
-    icon: Clock,
-    className: "border-amber-200 bg-amber-50 text-amber-700",
-    label: "Pending",
-  },
-  processing: {
-    icon: CircleNotch,
-    className: "border-blue-200 bg-blue-50 text-blue-700",
-    label: "Processing",
-  },
-  completed: {
-    icon: CheckCircle,
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    label: "Completed",
-  },
-  failed: {
-    icon: WarningCircle,
-    className: "border-rose-200 bg-rose-50 text-rose-700",
-    label: "Failed",
-  },
-  cancelled: {
-    icon: XCircle,
-    className: "border-zinc-200 bg-zinc-50 text-zinc-600",
-    label: "Cancelled",
-  },
+const statusClasses: Record<string, string> = {
+  queued: "border-amber-200 bg-amber-50 text-amber-700",
+  pending: "border-amber-200 bg-amber-50 text-amber-700",
+  processing: "border-blue-200 bg-blue-50 text-blue-700",
+  completed: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  failed: "border-rose-200 bg-rose-50 text-rose-700",
 };
 
 export default function LogsPage() {
-  const logs = useJobLogs();
+  useRenderJobEvents();
+  const jobs = useRenderJobs();
+  const retry = useRetryRender();
+  const [status, setStatus] = useState("all");
+  const [sort, setSort] = useState("newest");
+  const rows = useMemo(() => {
+    const filtered = (jobs.data ?? []).filter((job) => status === "all" || job.status === status);
+    return filtered.toSorted((a, b) => {
+      if (sort === "oldest") return +new Date(a.created_at) - +new Date(b.created_at);
+      if (sort === "progress") return b.progress - a.progress;
+      return +new Date(b.created_at) - +new Date(a.created_at);
+    });
+  }, [jobs.data, sort, status]);
+
+  async function retryJob(id: string) {
+    try {
+      await retry.mutateAsync(id);
+      toast.success("Render queued again.");
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    }
+  }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       <PageHeading
-        eyebrow="Clip queue"
-        title="Queue logs"
-        description="Backend-backed status for your clip analysis jobs. Active jobs refresh automatically."
+        eyebrow="Rendering"
+        title="Render jobs"
+        description="Track every selected clip from subtitle generation through final export."
         action={
-          <Button
-            variant="outline"
-            className="rounded-xl"
-            disabled={logs.isFetching}
-            onClick={() => void logs.refetch()}
-          >
-            <ClockCounterClockwise className={logs.isFetching ? "animate-spin" : ""} />
-            {logs.isFetching ? "Refreshing" : "Refresh"}
+          <Button variant="outline" onClick={() => void jobs.refetch()} disabled={jobs.isFetching}>
+            <ClockCounterClockwiseIcon className={jobs.isFetching ? "animate-spin" : ""} />
+            Refresh
           </Button>
         }
       />
-
-      {logs.isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-24 animate-pulse rounded-2xl bg-white" />
-          ))}
-        </div>
-      ) : logs.data?.length ? (
-        <Card className="overflow-hidden border-black/8 bg-white shadow-none">
-          <div className="divide-y divide-black/6">
-            {logs.data.map((log) => {
-              const meta = statusMeta[log.status];
-              return (
-                <div key={log.id} className="flex items-start gap-4 p-4 sm:items-center sm:px-5">
-                  <div
-                    className={`grid size-10 shrink-0 place-items-center rounded-xl ${meta.className}`}
-                  >
-                    <meta.icon
-                      weight="fill"
-                      className={`size-5 ${log.status === "processing" ? "animate-spin" : ""}`}
-                    />
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="bg-white sm:w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="queued">Queued</SelectItem>
+            <SelectItem value="processing">Processing</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="bg-white sm:w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest first</SelectItem>
+            <SelectItem value="oldest">Oldest first</SelectItem>
+            <SelectItem value="progress">Highest progress</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Card className="overflow-x-auto border-black/8 bg-white p-0 shadow-none">
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <thead className="border-b bg-zinc-50 text-xs uppercase text-muted-foreground">
+            <tr><th className="p-4">Clip</th><th>Status</th><th>Progress</th><th>Updated</th><th className="pr-4 text-right">Action</th></tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.map((job) => (
+              <tr key={job.id}>
+                <td className="max-w-xs p-4">
+                  <p className="truncate font-semibold">{job.video_title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{job.message || job.error}</p>
+                </td>
+                <td><Badge className={statusClasses[job.status]}>{job.status}</Badge></td>
+                <td className="w-52 pr-5">
+                  <div className="mb-1 flex justify-between text-xs"><span>{Math.round(job.progress)}%</span></div>
+                  <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+                    <div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }} />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="max-w-xl truncate font-heading text-sm font-semibold">
-                        {log.video_title || "Untitled video"}
-                      </p>
-                      <Badge className={meta.className}>{meta.label}</Badge>
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span>{log.message || meta.label}</span>
-                      <span>{Math.round(log.progress)}%</span>
-                      <span className="font-mono">#{log.id.slice(0, 8)}</span>
-                    </div>
-                    <div className="mt-2 h-1.5 max-w-xl overflow-hidden rounded-full bg-zinc-100">
-                      <div
-                        className="h-full rounded-full bg-violet-600 transition-all"
-                        style={{ width: `${Math.min(100, Math.max(0, log.progress))}%` }}
-                      />
-                    </div>
-                  </div>
-                  <time className="hidden shrink-0 text-xs text-muted-foreground sm:block">
-                    {new Intl.DateTimeFormat("en", {
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }).format(new Date(log.updated_at))}
-                  </time>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-black/15 bg-white/60 py-20 text-center">
-          <ClockCounterClockwise className="mx-auto size-9 text-violet-400" />
-          <h2 className="mt-4 font-heading text-lg font-semibold">The queue is empty</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Analyze a video and its backend queue status will appear here.
-          </p>
-        </div>
-      )}
+                </td>
+                <td className="text-xs text-muted-foreground">{new Date(job.updated_at).toLocaleString()}</td>
+                <td className="pr-4 text-right">
+                  {job.status === "failed" && (
+                    <Button size="sm" variant="outline" disabled={retry.isPending} onClick={() => void retryJob(job.id)}>
+                      {retry.isPending ? <CircleNotchIcon className="animate-spin" /> : <ArrowClockwiseIcon />} Retry
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!jobs.isLoading && rows.length === 0 && (
+              <tr><td colSpan={5} className="p-16 text-center text-muted-foreground">No render jobs found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }

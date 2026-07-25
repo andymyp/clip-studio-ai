@@ -19,11 +19,12 @@ type WorkerHandler struct {
 }
 
 type analyzeDiscoveredVideoRequest struct {
-	ExternalID string `json:"external_id" validate:"required,max=128"`
-	URL        string `json:"url" validate:"required,url,max=2048"`
-	Title      string `json:"title" validate:"required,max=500"`
-	Platform   string `json:"platform" validate:"required,oneof=youtube"`
-	Thumbnail  string `json:"thumbnail" validate:"omitempty,url,max=2048"`
+	ExternalID      string `json:"external_id" validate:"required,max=128"`
+	URL             string `json:"url" validate:"required,url,max=2048"`
+	Title           string `json:"title" validate:"required,max=500"`
+	Platform        string `json:"platform" validate:"required,oneof=youtube"`
+	Thumbnail       string `json:"thumbnail" validate:"omitempty,url,max=2048"`
+	YouTubeUsername string `json:"youtube_username" validate:"omitempty,max=100"`
 }
 
 func NewWorkerHandler(worker *service.WorkerClient, logger *zap.Logger) *WorkerHandler {
@@ -50,6 +51,7 @@ func (handler *WorkerHandler) CreateAnalysis(c *gin.Context) {
 		UserID: userID.String(), ExternalID: request.ExternalID,
 		URL: request.URL, Title: request.Title,
 		Platform: request.Platform, Thumbnail: request.Thumbnail,
+		YouTubeUsername: request.YouTubeUsername,
 	})
 	if err != nil {
 		writeError(c, handler.logger, err)

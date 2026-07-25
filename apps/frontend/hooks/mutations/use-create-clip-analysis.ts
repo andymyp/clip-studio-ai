@@ -12,6 +12,7 @@ export function useCreateClipAnalysis() {
         title: video.title,
         platform: video.platform,
         thumbnail: video.thumbnail,
+        youtube_username: video.youtube_username,
       });
       return data;
     },

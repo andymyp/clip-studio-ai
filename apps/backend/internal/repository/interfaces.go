@@ -33,36 +33,10 @@ type ClipRepositoryContract interface {
 	Delete(context.Context, uuid.UUID) error
 }
 
-type AnalysisJobRepositoryContract interface {
-	Create(context.Context, *model.AnalysisJob) error
-	GetByID(context.Context, uuid.UUID) (*model.AnalysisJob, error)
-	GetByIDForUser(context.Context, uuid.UUID, uuid.UUID) (*model.AnalysisJob, error)
-	ListByVideoID(context.Context, uuid.UUID) ([]model.AnalysisJob, error)
-	ListByUserID(context.Context, uuid.UUID, int) ([]model.AnalysisJob, error)
-	Update(context.Context, *model.AnalysisJob) error
-	Delete(context.Context, uuid.UUID) error
-}
-
 type RenderJobRepositoryContract interface {
 	Create(context.Context, *model.RenderJob) error
 	GetByID(context.Context, uuid.UUID) (*model.RenderJob, error)
 	ListByClipID(context.Context, uuid.UUID) ([]model.RenderJob, error)
 	Update(context.Context, *model.RenderJob) error
-	Delete(context.Context, uuid.UUID) error
-}
-
-type SubtitleRepositoryContract interface {
-	Create(context.Context, *model.Subtitle) error
-	GetByID(context.Context, uuid.UUID) (*model.Subtitle, error)
-	ListByVideoID(context.Context, uuid.UUID) ([]model.Subtitle, error)
-	Update(context.Context, *model.Subtitle) error
-	Delete(context.Context, uuid.UUID) error
-}
-
-type WatermarkRepositoryContract interface {
-	Create(context.Context, *model.Watermark) error
-	GetByID(context.Context, uuid.UUID) (*model.Watermark, error)
-	ListByUserID(context.Context, uuid.UUID) ([]model.Watermark, error)
-	Update(context.Context, *model.Watermark) error
 	Delete(context.Context, uuid.UUID) error
 }

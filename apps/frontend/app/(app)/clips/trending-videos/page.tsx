@@ -157,6 +157,11 @@ function DiscoveryCard({
         <h2 className="line-clamp-2 min-h-12 font-heading font-semibold leading-6">
           {video.title}
         </h2>
+        {(video.youtube_username || video.channel_title) && (
+          <p className="mt-1 truncate text-xs font-medium text-violet-700">
+            {video.youtube_username || video.channel_title}
+          </p>
+        )}
         <VideoMetrics video={video} compact />
         <Button variant="outline" className="mt-4 w-full rounded-xl" onClick={onPreview}>
           <PlayIcon />
@@ -219,6 +224,11 @@ function VideoPreview({
           <h2 className="mt-3 font-heading text-xl font-semibold leading-7">
             {video.title}
           </h2>
+          {(video.youtube_username || video.channel_title) && (
+            <p className="mt-2 text-sm font-medium text-violet-700">
+              {video.youtube_username || video.channel_title}
+            </p>
+          )}
         </div>
         <VideoMetrics video={video} />
         <div className="flex flex-col-reverse gap-2 sm:flex-row">

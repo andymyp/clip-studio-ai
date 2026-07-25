@@ -26,6 +26,8 @@ def test_download_uses_section_only(tmp_path: Path) -> None:
     assert command[command.index("--download-sections") + 1] == "*80.000-120.000"
     assert "--download-sections" in command
     assert "--socket-timeout" in command
+    assert "height<=1080" in command[command.index("--format") + 1]
+    assert command[command.index("--format-sort") + 1].startswith("res:1080")
     assert command[command.index("--cookies") + 1] == str(cookie_file.resolve())
     assert command[command.index("--impersonate") + 1] == "chrome"
     assert output.name == "clip.mp4"

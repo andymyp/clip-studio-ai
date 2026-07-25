@@ -77,3 +77,26 @@ def test_heuristic_fallback_returns_non_overlapping_candidates() -> None:
     assert len(clips) == 2
     assert all(20 <= clip.end - clip.start <= 60 for clip in clips)
     assert clips[0].end <= clips[1].start or clips[1].end <= clips[0].start
+
+
+def test_equal_model_scores_become_comparative_and_distinct() -> None:
+    service = ClipRankingService("http://ollama", maximum_candidates=5)
+    transcript = [
+        TranscriptSegment(text=f"Moment {index}", start=index * 30, end=index * 30 + 30)
+        for index in range(5)
+    ]
+    tied = [
+        RankedClip(
+            start=index * 30,
+            end=index * 30 + 30,
+            score=89,
+            reason=f"Candidate {index}",
+        )
+        for index in range(5)
+    ]
+
+    with patch.object(service, "_analyze_window", return_value=tied):
+        clips = service.analyze(transcript)
+
+    assert len(clips) == 5
+    assert [clip.score for clip in clips] == [89, 87, 85, 83, 81]

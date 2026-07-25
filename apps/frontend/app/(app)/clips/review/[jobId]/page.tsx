@@ -7,25 +7,58 @@ import {
   FilmStripIcon,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeading } from "@/components/page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useCreateRenders } from "@/hooks/mutations/use-create-renders";
 import { useClipAnalysisEvents } from "@/hooks/sse/use-clip-analysis-events";
 import { apiErrorMessage } from "@/lib/api";
 import type { GeneratedClip } from "@/lib/types";
+import { renderClipsSchema, type RenderClipsValues } from "@/lib/validations";
 
 const workerURL = process.env.NEXT_PUBLIC_WORKER_URL ?? "http://localhost:3002";
 
 export default function ReviewClipsPage() {
   const { jobId: externalID } = useParams<{ jobId: string }>();
+  const router = useRouter();
   const job = useClipAnalysisEvents(externalID);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [playingClipID, setPlayingClipID] = useState<string | null>(null);
+  const [renderOpen, setRenderOpen] = useState(false);
+  const createRenders = useCreateRenders();
+  const renderForm = useForm<RenderClipsValues>({
+    resolver: zodResolver(renderClipsSchema),
+    defaultValues: { watermark_text: "" },
+  });
+
+  function submitRender(values: RenderClipsValues) {
+    createRenders.mutate(
+      {
+        external_id: externalID,
+        clip_ids: [...selected],
+        watermark_text: values.watermark_text,
+      },
+      {
+        onSuccess: (jobs) => {
+          toast.success(`${jobs.length} render jobs queued`);
+          setRenderOpen(false);
+          router.push("/logs");
+        },
+        onError: (error) => toast.error(apiErrorMessage(error)),
+      },
+    );
+  }
 
   function toggle(clipID: string, checked: boolean) {
     setSelected((current) => {
@@ -75,11 +108,7 @@ export default function ReviewClipsPage() {
           <Button
             className="h-11 rounded-xl px-4"
             disabled={selected.size === 0}
-            onClick={() =>
-              toast.info("Rendering is not implemented yet", {
-                description: `${selected.size} clips are selected and ready for the render step.`,
-              })
-            }
+            onClick={() => setRenderOpen(true)}
           >
             <CheckSquareIcon />
             Render selected ({selected.size})
@@ -88,29 +117,85 @@ export default function ReviewClipsPage() {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-        {job.data.clips.map((clip) => (
+        {job.data.clips
+          .toSorted((a, b) => b.score - a.score)
+          .slice(0, 5)
+          .map((clip, index) => (
           <CandidateCard
             key={clip.id}
             clip={clip}
+            rank={index + 1}
+            playing={playingClipID === clip.id}
+            onPlay={() => setPlayingClipID(clip.id)}
             selected={selected.has(clip.id)}
             onSelectedChange={(checked) => toggle(clip.id, checked)}
           />
-        ))}
+          ))}
       </div>
+
+      <ResponsiveModal
+        open={renderOpen}
+        onOpenChange={setRenderOpen}
+        title="Render selected clips"
+        description={`${selected.size} clips will be rendered in 9:16 with animated subtitles.`}
+      >
+        <Form {...renderForm}>
+          <form onSubmit={renderForm.handleSubmit(submitRender)} className="space-y-5">
+            <fieldset disabled={createRenders.isPending}>
+              <FormField
+                control={renderForm.control}
+                name="watermark_text"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Watermark text</FormLabel>
+                    <FormControl>
+                      <Input placeholder="@yourbrand" maxLength={100} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </fieldset>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setRenderOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createRenders.isPending}>
+                {createRenders.isPending && <CircleNotchIcon className="animate-spin" />}
+                Render
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </ResponsiveModal>
     </div>
   );
 }
 
 function CandidateCard({
   clip,
+  rank,
+  playing,
+  onPlay,
   selected,
   onSelectedChange,
 }: {
   clip: GeneratedClip;
+  rank: number;
+  playing: boolean;
+  onPlay: () => void;
   selected: boolean;
   onSelectedChange: (checked: boolean) => void;
 }) {
   const mediaURL = new URL(clip.media_url, workerURL).toString();
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (!playing && videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause();
+    }
+  }, [playing]);
+
   return (
     <Card
       className={`overflow-hidden border-black/8 bg-white p-0 transition ${
@@ -118,31 +203,38 @@ function CandidateCard({
       }`}
     >
       <video
+        ref={videoRef}
         src={mediaURL}
         controls
+        onPlay={onPlay}
         playsInline
         preload="metadata"
-        className="aspect-9/16 max-h-[32rem] w-full bg-black object-contain"
+        className="aspect-video max-h-128 w-full bg-black object-contain"
       />
-      <div className="space-y-4 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <Badge className="border-violet-200 bg-violet-50 text-violet-700">
-              {Math.round(clip.score)} score
-            </Badge>
-            <p className="mt-2 text-sm leading-6">{clip.reason}</p>
+      <label>
+        <div className="space-y-4 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap gap-2">
+                <Badge>#{rank} ranked</Badge>
+                <Badge className="border-violet-200 bg-violet-50 text-violet-700">
+                  {Math.round(clip.score)} score
+                </Badge>
+              </div>
+              <p className="mt-2 text-sm leading-6">{clip.reason}</p>
+            </div>
+            <Checkbox
+              checked={selected}
+              onCheckedChange={(checked) => onSelectedChange(checked === true)}
+              aria-label="Select clip for rendering"
+            />
           </div>
-          <Checkbox
-            checked={selected}
-            onCheckedChange={(checked) => onSelectedChange(checked === true)}
-            aria-label="Select clip for rendering"
-          />
+          <p className="text-xs text-muted-foreground">
+            {formatTime(clip.start)}–{formatTime(clip.end)} ·{" "}
+            {Math.round(clip.end - clip.start)} seconds
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {formatTime(clip.start)}–{formatTime(clip.end)} ·{" "}
-          {Math.round(clip.end - clip.start)} seconds
-        </p>
-      </div>
+      </label>
     </Card>
   );
 }

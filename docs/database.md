@@ -10,14 +10,12 @@ User
 |--< Video
 |    |--< Clip
 |    |    `--< RenderJob
-|    |--< AnalysisJob
-|    `--< Subtitle
-`--< Watermark
+|    |         `--< ClipPerformance
 ```
 
 Every relationship uses a PostgreSQL foreign key with `ON UPDATE CASCADE` and
 `ON DELETE CASCADE`. Deleting a user therefore removes that user's videos,
-clips, analysis jobs, render jobs, subtitles, and watermarks.
+clips, render jobs, and performance snapshots.
 
 ## Tables
 
@@ -55,49 +53,30 @@ clips, analysis jobs, render jobs, subtitles, and watermarks.
 | `status`                   | Indexed clip lifecycle status                   |
 | `created_at`, `updated_at` | Timestamps                                      |
 
-### analysis_jobs
-
-| Column                     | Notes                           |
-| -------------------------- | ------------------------------- |
-| `id`                       | UUID primary key                |
-| `video_id`                 | Indexed video foreign key       |
-| `status`                   | Indexed job lifecycle status    |
-| `progress`                 | Value from 0 through 100        |
-| `message`                  | Worker status or failure detail |
-| `created_at`, `updated_at` | Timestamps                      |
-
 ### render_jobs
 
-| Column                     | Notes                        |
-| -------------------------- | ---------------------------- |
-| `id`                       | UUID primary key             |
-| `clip_id`                  | Indexed clip foreign key     |
-| `status`                   | Indexed job lifecycle status |
-| `output_path`              | Rendered artifact path       |
-| `created_at`, `updated_at` | Timestamps                   |
+| Column                                      | Notes                        |
+| ------------------------------------------- | ---------------------------- |
+| `id`                                        | UUID primary key             |
+| `clip_id`                                   | Indexed clip foreign key     |
+| `status`, `progress`, `message`, `error`     | Render lifecycle             |
+| `output_path`, `media_url`, `subtitle_path` | Generated artifact locations |
+| `watermark_text`, `source_url`               | Burn-in configuration        |
+| `title`, `description`, `hashtags`, `hook`   | Generated packaging          |
+| `removed_seconds`, `pattern_interrupts`      | Optimization summary         |
+| `created_at`, `updated_at`                   | Timestamps                   |
 
-### subtitles
+### clip_performances
 
-| Column                     | Notes                            |
-| -------------------------- | -------------------------------- |
-| `id`                       | UUID primary key                 |
-| `video_id`                 | Indexed video foreign key        |
-| `language`, `format`       | Unique as a pair within a video  |
-| `content`                  | Subtitle content                 |
-| `file_path`                | Generated subtitle artifact path |
-| `created_at`, `updated_at` | Timestamps                       |
-
-### watermarks
-
-| Column                     | Notes                        |
-| -------------------------- | ---------------------------- |
-| `id`                       | UUID primary key             |
-| `user_id`                  | Indexed user foreign key     |
-| `name`, `file_path`        | Watermark identity and asset |
-| `position`                 | Render position              |
-| `opacity`                  | Value from 0 through 1       |
-| `scale`                    | Positive scale factor        |
-| `created_at`, `updated_at` | Timestamps                   |
+| Column                                      | Notes                          |
+| ------------------------------------------- | ------------------------------ |
+| `id`                                        | UUID primary key               |
+| `render_job_id`                             | Indexed render-job foreign key |
+| `platform`                                  | YouTube, TikTok, or Instagram  |
+| `views`, `likes`, `comments`, `shares`      | Published engagement metrics   |
+| `average_watch_seconds`                     | Average audience watch time    |
+| `completion_percentage`, `viral_score`      | Retention and learned outcome  |
+| `created_at`, `updated_at`                   | Timestamps                     |
 
 ## Migrations
 
@@ -111,6 +90,6 @@ pnpm db:migrate
 Set `AUTO_MIGRATE=false` in production and run the migration command as a
 separate deployment step.
 
-GORM `AutoMigrate` is intentionally additive: it creates missing tables,
-columns, constraints, and indexes but does not remove obsolete columns. Future
-destructive schema changes should use explicit versioned migrations.
+GORM `AutoMigrate` creates active tables, columns, constraints, and indexes.
+The migration also explicitly removes the obsolete `analysis_jobs`,
+`subtitles`, and `watermarks` tables from older installations.

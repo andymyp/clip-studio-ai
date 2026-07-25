@@ -162,56 +162,6 @@ func (repo *ClipRepository) ListByVideoID(
 	return repo.listBy(ctx, "video_id", videoID, 0, 0)
 }
 
-type AnalysisJobRepository struct {
-	*baseRepository[model.AnalysisJob]
-}
-
-func (repo *AnalysisJobRepository) GetByID(
-	ctx context.Context,
-	id uuid.UUID,
-) (*model.AnalysisJob, error) {
-	return repo.getByID(ctx, id)
-}
-
-func (repo *AnalysisJobRepository) GetByIDForUser(
-	ctx context.Context,
-	id uuid.UUID,
-	userID uuid.UUID,
-) (*model.AnalysisJob, error) {
-	var job model.AnalysisJob
-	err := repo.db.WithContext(ctx).
-		Joins("JOIN videos ON videos.id = analysis_jobs.video_id").
-		Where("analysis_jobs.id = ? AND videos.user_id = ?", id, userID).
-		First(&job).Error
-	if err != nil {
-		return nil, translateError(err)
-	}
-	return &job, nil
-}
-
-func (repo *AnalysisJobRepository) ListByVideoID(
-	ctx context.Context,
-	videoID uuid.UUID,
-) ([]model.AnalysisJob, error) {
-	return repo.listBy(ctx, "video_id", videoID, 0, 0)
-}
-
-func (repo *AnalysisJobRepository) ListByUserID(
-	ctx context.Context,
-	userID uuid.UUID,
-	limit int,
-) ([]model.AnalysisJob, error) {
-	var jobs []model.AnalysisJob
-	err := repo.db.WithContext(ctx).
-		Joins("JOIN videos ON videos.id = analysis_jobs.video_id").
-		Where("videos.user_id = ?", userID).
-		Preload("Video").
-		Order("analysis_jobs.created_at DESC").
-		Limit(limit).
-		Find(&jobs).Error
-	return jobs, err
-}
-
 type RenderJobRepository struct {
 	*baseRepository[model.RenderJob]
 }
@@ -230,50 +180,11 @@ func (repo *RenderJobRepository) ListByClipID(
 	return repo.listBy(ctx, "clip_id", clipID, 0, 0)
 }
 
-type SubtitleRepository struct {
-	*baseRepository[model.Subtitle]
-}
-
-func (repo *SubtitleRepository) GetByID(
-	ctx context.Context,
-	id uuid.UUID,
-) (*model.Subtitle, error) {
-	return repo.getByID(ctx, id)
-}
-
-func (repo *SubtitleRepository) ListByVideoID(
-	ctx context.Context,
-	videoID uuid.UUID,
-) ([]model.Subtitle, error) {
-	return repo.listBy(ctx, "video_id", videoID, 0, 0)
-}
-
-type WatermarkRepository struct {
-	*baseRepository[model.Watermark]
-}
-
-func (repo *WatermarkRepository) GetByID(
-	ctx context.Context,
-	id uuid.UUID,
-) (*model.Watermark, error) {
-	return repo.getByID(ctx, id)
-}
-
-func (repo *WatermarkRepository) ListByUserID(
-	ctx context.Context,
-	userID uuid.UUID,
-) ([]model.Watermark, error) {
-	return repo.listBy(ctx, "user_id", userID, 0, 0)
-}
-
 type Repositories struct {
-	Users        UserRepositoryContract
-	Videos       VideoRepositoryContract
-	Clips        ClipRepositoryContract
-	AnalysisJobs AnalysisJobRepositoryContract
-	RenderJobs   RenderJobRepositoryContract
-	Subtitles    SubtitleRepositoryContract
-	Watermarks   WatermarkRepositoryContract
+	Users      UserRepositoryContract
+	Videos     VideoRepositoryContract
+	Clips      ClipRepositoryContract
+	RenderJobs RenderJobRepositoryContract
 }
 
 func New(db *gorm.DB) *Repositories {
@@ -287,17 +198,8 @@ func New(db *gorm.DB) *Repositories {
 		Clips: &ClipRepository{
 			baseRepository: &baseRepository[model.Clip]{db: db},
 		},
-		AnalysisJobs: &AnalysisJobRepository{
-			baseRepository: &baseRepository[model.AnalysisJob]{db: db},
-		},
 		RenderJobs: &RenderJobRepository{
 			baseRepository: &baseRepository[model.RenderJob]{db: db},
-		},
-		Subtitles: &SubtitleRepository{
-			baseRepository: &baseRepository[model.Subtitle]{db: db},
-		},
-		Watermarks: &WatermarkRepository{
-			baseRepository: &baseRepository[model.Watermark]{db: db},
 		},
 	}
 }

@@ -158,7 +158,47 @@ func (provider *YouTubeProvider) videos(
 	if err := provider.get(ctx, "/videos", query, &response); err != nil {
 		return nil, err
 	}
-	return normalizeYouTubeVideos(response.Items), nil
+	results := normalizeYouTubeVideos(response.Items)
+	channelIDs := make([]string, 0, len(results))
+	for _, result := range results {
+		if result.ChannelID != "" {
+			channelIDs = append(channelIDs, result.ChannelID)
+		}
+	}
+	handles, err := provider.channelHandles(ctx, channelIDs)
+	if err == nil {
+		for index := range results {
+			results[index].YouTubeUsername = handles[results[index].ChannelID]
+		}
+	}
+	return results, nil
+}
+
+func (provider *YouTubeProvider) channelHandles(
+	ctx context.Context,
+	ids []string,
+) (map[string]string, error) {
+	if len(ids) == 0 {
+		return map[string]string{}, nil
+	}
+	query := url.Values{
+		"part": {"snippet"},
+		"id":   {strings.Join(ids, ",")},
+		"key":  {provider.apiKey},
+	}
+	var response youtubeChannelsResponse
+	if err := provider.get(ctx, "/channels", query, &response); err != nil {
+		return nil, err
+	}
+	handles := make(map[string]string, len(response.Items))
+	for _, channel := range response.Items {
+		handle := strings.TrimSpace(channel.Snippet.CustomURL)
+		if handle != "" && !strings.HasPrefix(handle, "@") {
+			handle = "@" + handle
+		}
+		handles[channel.ID] = handle
+	}
+	return handles, nil
 }
 
 func (provider *YouTubeProvider) get(
@@ -197,13 +237,24 @@ type youtubeVideosResponse struct {
 	Items []youtubeVideo `json:"items"`
 }
 
+type youtubeChannelsResponse struct {
+	Items []struct {
+		ID      string `json:"id"`
+		Snippet struct {
+			CustomURL string `json:"customUrl"`
+		} `json:"snippet"`
+	} `json:"items"`
+}
+
 type youtubeVideo struct {
 	ID      string `json:"id"`
 	Snippet struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		CategoryID  string `json:"categoryId"`
-		Thumbnails  map[string]struct {
+		Title        string `json:"title"`
+		Description  string `json:"description"`
+		CategoryID   string `json:"categoryId"`
+		ChannelID    string `json:"channelId"`
+		ChannelTitle string `json:"channelTitle"`
+		Thumbnails   map[string]struct {
 			URL string `json:"url"`
 		} `json:"thumbnails"`
 	} `json:"snippet"`
@@ -226,17 +277,19 @@ func normalizeYouTubeVideos(items []youtubeVideo) []model.VideoSearchResult {
 	for _, item := range items {
 		results = append(results, model.VideoSearchResult{
 			ExternalID: item.ID, Platform: "youtube", Title: item.Snippet.Title,
-			CategoryID:  item.Snippet.CategoryID,
-			Description: item.Snippet.Description,
-			URL:         "https://www.youtube.com/watch?v=" + item.ID,
-			EmbedURL:    "https://www.youtube.com/embed/" + item.ID,
-			Thumbnail:   bestYouTubeThumbnail(item.Snippet.Thumbnails),
-			Duration:    parseYouTubeDuration(item.ContentDetails.Duration).Seconds(),
-			Views:       parseMetric(item.Statistics.ViewCount),
-			Likes:       parseMetric(item.Statistics.LikeCount),
-			Comments:    parseMetric(item.Statistics.CommentCount),
-			License:     item.Status.License,
-			Reusable:    item.Status.License == "creativeCommon",
+			CategoryID:   item.Snippet.CategoryID,
+			ChannelID:    item.Snippet.ChannelID,
+			ChannelTitle: item.Snippet.ChannelTitle,
+			Description:  item.Snippet.Description,
+			URL:          "https://www.youtube.com/watch?v=" + item.ID,
+			EmbedURL:     "https://www.youtube.com/embed/" + item.ID,
+			Thumbnail:    bestYouTubeThumbnail(item.Snippet.Thumbnails),
+			Duration:     parseYouTubeDuration(item.ContentDetails.Duration).Seconds(),
+			Views:        parseMetric(item.Statistics.ViewCount),
+			Likes:        parseMetric(item.Statistics.LikeCount),
+			Comments:     parseMetric(item.Statistics.CommentCount),
+			License:      item.Status.License,
+			Reusable:     item.Status.License == "creativeCommon",
 		})
 	}
 	return results

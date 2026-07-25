@@ -24,6 +24,7 @@ class AnalysisJobStore:
             title=payload.title,
             platform=payload.platform,
             thumbnail=payload.thumbnail,
+            youtube_username=payload.youtube_username,
             status="queued",
             progress=0,
             message="Queued for subtitle extraction",
@@ -85,6 +86,12 @@ class AnalysisJobStore:
     def acknowledge(self, job_id: str) -> None:
         self.client.lrem(self.processing_queue_name, 1, job_id)
 
+    def release(self, job_id: str) -> None:
+        pipe = self.client.pipeline()
+        pipe.lrem(self.processing_queue_name, 1, job_id)
+        pipe.rpush(self.queue_name, job_id)
+        pipe.execute()
+
     def recover_interrupted(self) -> int:
         recovered = 0
         while self.client.rpoplpush(self.processing_queue_name, self.queue_name) is not None:
@@ -112,4 +119,5 @@ class AnalysisJobStore:
 
     @staticmethod
     def _review_key(user_id: str, platform: str, external_id: str) -> str:
-        return f"clipstudio:analysis:review:{user_id}:{platform}:{external_id}"
+        # Version the ranking cache so algorithm changes do not serve stale scores.
+        return f"clipstudio:analysis:review:v4:{user_id}:{platform}:{external_id}"

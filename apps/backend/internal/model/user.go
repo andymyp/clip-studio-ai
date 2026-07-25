@@ -8,6 +8,5 @@ type User struct {
 	// authentication was introduced.
 	Name string `gorm:"size:160;not null;default:''" json:"-"`
 
-	Videos     []Video     `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
-	Watermarks []Watermark `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
+	Videos []Video `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 }

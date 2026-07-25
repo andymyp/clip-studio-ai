@@ -8,7 +8,6 @@ import (
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/middleware"
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/repository"
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/service"
-	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/sse"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -16,12 +15,6 @@ import (
 func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
-	videoService := service.NewService(
-		deps.Repositories.Videos,
-		deps.Repositories.AnalysisJobs,
-		deps.AsynqClient,
-		cfg.AsynqQueue,
-	)
 	discoveryHTTPClient := &http.Client{Timeout: cfg.DiscoveryTimeout}
 	var youtubeProvider service.DiscoveryProvider
 	if cfg.EnableYouTubeAPI {
@@ -58,13 +51,11 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 		repository.NewRedisDiscoveryCache(deps.Redis),
 		cfg.DiscoveryCacheTTL,
 	)
-	handler := NewHandler(videoService, discoveryService, deps.Logger)
-	workerHandler := NewWorkerHandler(
-		service.NewWorkerClient(cfg.WorkerAPIURL, discoveryHTTPClient),
-		deps.Logger,
-	)
+	handler := NewHandler(discoveryService, deps.Logger)
+	workerClient := service.NewWorkerClient(cfg.WorkerAPIURL, discoveryHTTPClient)
+	workerHandler := NewWorkerHandler(workerClient, deps.Logger)
+	renderHandler := NewRenderHandler(deps.DB, deps.Redis, workerClient, deps.Logger)
 	authHandler := NewAuthHandler(deps.Auth, deps.Logger)
-	eventHandler := sse.NewHandler(deps.Repositories.AnalysisJobs, deps.Logger)
 
 	router := gin.New()
 	router.Use(
@@ -101,11 +92,16 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 	clips.GET("/jobs/:id", workerHandler.GetAnalysis)
 	clips.GET("/reviews/:external_id", workerHandler.GetReview)
 	clips.GET("/reviews/:external_id/events", workerHandler.AnalysisEvents)
+	clips.GET("/rendered", renderHandler.Rendered)
 
-	api := router.Group("/api")
-	api.Use(middleware.Authenticate(deps.Auth))
-	api.GET("/jobs/:id/events", eventHandler.JobEvents)
-	api.GET("/logs", handler.JobLogs)
+	renders := router.Group("/renders")
+	renders.Use(middleware.Authenticate(deps.Auth))
+	renders.POST("", renderHandler.Create)
+	renders.GET("", renderHandler.List)
+	renders.GET("/events", renderHandler.Events)
+	renders.POST("/:id/retry", renderHandler.Retry)
+	renders.POST("/:id/feedback", renderHandler.CreateFeedback)
+	renders.GET("/:id/feedback", renderHandler.ListFeedback)
 
 	return router
 }

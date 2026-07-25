@@ -22,8 +22,11 @@ class Settings(BaseSettings):
     ytdlp_sleep_subtitles: float = 5
     clip_min_duration: float = 20
     clip_max_duration: float = 60
-    clip_max_candidates: int = 8
+    clip_max_candidates: int = 5
+    clip_context_before: float = 2.0
+    clip_context_after: float = 1.2
     job_queue_name: str = "clipstudio:analysis:queue"
+    render_queue_name: str = "clipstudio:render:queue"
 
     # Support running from the repository root or apps/worker directory.
     model_config = SettingsConfigDict(

@@ -68,7 +68,12 @@ class PartialDownloaderService:
             "--merge-output-format",
             "mp4",
             "--format",
-            "b[ext=mp4][height<=720]/b[height<=720]/b",
+            (
+                "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/"
+                "bv*[height<=1080]+ba/b[height<=1080]/b"
+            ),
+            "--format-sort",
+            "res:1080,fps,hdr:12,vcodec:avc1,acodec:m4a",
             "--output",
             str(output),
             url,

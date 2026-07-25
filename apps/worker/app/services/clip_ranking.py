@@ -29,6 +29,7 @@ class ClipRankingService:
         self.window_duration = window_duration
         self.window_overlap = window_overlap
         self.maximum_analysis_windows = maximum_analysis_windows
+        self.preferred_duration: float | None = None
 
     def analyze(self, transcript: list[TranscriptSegment]) -> list[RankedClip]:
         if not transcript:
@@ -55,13 +56,13 @@ class ClipRankingService:
             deduplicated.append(clip)
             if len(deduplicated) == self.maximum_candidates:
                 break
-        return deduplicated
+        return self._comparative_scores(deduplicated)
 
     def _heuristic_candidates(
         self,
         transcript: list[TranscriptSegment],
     ) -> list[RankedClip]:
-        target_duration = min(45, self.maximum_duration)
+        target_duration = min(self.preferred_duration or 45, self.maximum_duration)
         candidates: list[tuple[float, RankedClip]] = []
         for index, start_segment in enumerate(transcript):
             target_end = start_segment.start + target_duration
@@ -84,7 +85,7 @@ class ClipRankingService:
             )
             density = len({word.lower().strip(".,!?") for word in words}) / len(words)
             raw_score = len(words) / max(duration, 1) + hook_count * 2 + density * 5
-            score = min(89, 68 + raw_score)
+            score = min(98, 60 + raw_score)
             candidates.append(
                 (
                     raw_score,
@@ -108,6 +109,20 @@ class ClipRankingService:
             if len(selected) == self.maximum_candidates:
                 break
         return selected
+
+    @staticmethod
+    def _comparative_scores(clips: list[RankedClip]) -> list[RankedClip]:
+        """Make the score a rank against this candidate set, not an isolated rating."""
+        compared: list[RankedClip] = []
+        previous = 101.0
+        for position, clip in enumerate(clips):
+            # Models often return identical optimistic scores. Preserve their ordering
+            # while enforcing a visible confidence gap between ranked candidates.
+            ceiling = 98.0 if position == 0 else previous - 2.0
+            score = max(0.0, min(float(clip.score), ceiling))
+            compared.append(clip.model_copy(update={"score": round(score, 1)}))
+            previous = score
+        return compared
 
     def _select_windows(
         self,
@@ -158,13 +173,25 @@ class ClipRankingService:
             },
             "required": ["clips"],
         }
-        per_window = min(3, self.maximum_candidates)
+        per_window = self.maximum_candidates
         prompt = (
-            "Find the best standalone moments for vertical short-form video. "
+            "Compare the transcript moments against each other and rank only the best "
+            "standalone moments for vertical short-form video. "
             f"Return at most {per_window} moments, each between "
             f"{self.minimum_duration:g} and {self.maximum_duration:g} seconds. "
-            "Score hook strength, emotion, curiosity, replay probability, and "
-            "information density. Do not invent timestamps. Prefer complete thoughts. "
+            + (
+                f"Historical performance currently favors about "
+                f"{self.preferred_duration:.0f} seconds; use that only when the story stays complete. "
+                if self.preferred_duration
+                else ""
+            )
+            + "Use a strict weighted score: first-3-second hook 30%, retention/open loop 20%, "
+            "emotion or surprise 15%, useful information 15%, shareability 10%, and "
+            "standalone clarity 10%. Scores must be comparative and distinct; do not give "
+            "multiple clips the same score. Reject greetings, context-dependent fragments, "
+            "calls to subscribe, sensitive content, and moments that need the full episode. "
+            "Prefer a complete mini-story with hook, payoff, and a clean ending. "
+            "Do not invent timestamps. "
             "The timestamps are absolute seconds from the source video. "
             "Transcript JSON:\n"
             + json.dumps([segment.model_dump() for segment in transcript], ensure_ascii=False)

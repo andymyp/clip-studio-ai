@@ -58,4 +58,22 @@ export const clipByLinkSchema = z.object({
 
 export type AuthValues = z.infer<typeof authSchema>;
 export type ClipByLinkValues = z.infer<typeof clipByLinkSchema>;
+
+export const renderClipsSchema = z.object({
+  watermark_text: z.string().trim().max(100, "Use 100 characters or fewer."),
+});
+
+export type RenderClipsValues = z.infer<typeof renderClipsSchema>;
 export type VideoSearchValues = z.infer<typeof videoSearchSchema>;
+
+export const performanceFeedbackSchema = z.object({
+  platform: z.enum(["youtube", "tiktok", "instagram"]),
+  views: z.number().int().min(0),
+  likes: z.number().int().min(0),
+  comments: z.number().int().min(0),
+  shares: z.number().int().min(0),
+  average_watch_seconds: z.number().min(0),
+  completion_percentage: z.number().min(0).max(100),
+});
+
+export type PerformanceFeedbackValues = z.infer<typeof performanceFeedbackSchema>;

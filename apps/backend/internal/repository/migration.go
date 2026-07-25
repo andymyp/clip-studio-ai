@@ -19,14 +19,24 @@ func Migrate(db *gorm.DB) error {
 		if err := prepareAuthenticationMigration(tx); err != nil {
 			return err
 		}
+		if tx.Migrator().HasIndex(&model.Video{}, "idx_videos_platform_url") {
+			if err := tx.Migrator().DropIndex(&model.Video{}, "idx_videos_platform_url"); err != nil {
+				return fmt.Errorf("drop legacy video uniqueness index: %w", err)
+			}
+		}
+		// These foundation-era tables were superseded by the Redis analysis
+		// cache and render_jobs fields. Drop them explicitly for existing installs.
+		if err := tx.Exec(
+			"DROP TABLE IF EXISTS subtitles, watermarks, analysis_jobs CASCADE",
+		).Error; err != nil {
+			return fmt.Errorf("drop obsolete tables: %w", err)
+		}
 		return tx.AutoMigrate(
 			&model.User{},
 			&model.Video{},
 			&model.Clip{},
-			&model.AnalysisJob{},
 			&model.RenderJob{},
-			&model.Subtitle{},
-			&model.Watermark{},
+			&model.ClipPerformance{},
 		)
 	})
 	if err != nil {
