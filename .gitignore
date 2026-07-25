@@ -167,12 +167,15 @@ apps/backend/*.exe
 apps/backend/api
 
 # ClipStudio AI: generated media
+storage/secrets/*
+!storage/secrets/.gitkeep
 storage/input/*
 storage/output/*
 storage/temp/*
 !storage/input/.gitkeep
 !storage/output/.gitkeep
 !storage/temp/.gitkeep
+apps/worker/storage/*
 
 # ClipStudio AI: local tooling
 .turbo/

@@ -8,20 +8,21 @@ import {
   EyeIcon,
   FilmStripIcon,
   HeartIcon,
+  CircleNotchIcon,
   PlayIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { PageHeading } from "@/components/page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
+import { useCreateClipAnalysis } from "@/hooks/mutations/use-create-clip-analysis";
 import { useVideoDiscovery } from "@/hooks/queries/use-video-discovery";
 import { apiErrorMessage } from "@/lib/api";
 import type { VideoSearchResult } from "@/lib/types";
@@ -30,9 +31,20 @@ const metricFormatter = new Intl.NumberFormat("en", { notation: "compact" });
 
 export default function TrendingVideosPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const sourceURL = searchParams.get("url")?.trim() || undefined;
   const discovery = useVideoDiscovery({ url: sourceURL });
   const [preview, setPreview] = useState<VideoSearchResult | null>(null);
+  const createAnalysis = useCreateClipAnalysis();
+
+  function clipVideo(video: VideoSearchResult) {
+    createAnalysis.mutate(video, {
+      onSuccess: (job) => {
+        setPreview(null);
+        router.push(`/clips/review/${encodeURIComponent(job.external_id)}`);
+      },
+    });
+  }
 
   return (
     <div className="space-y-7">
@@ -95,7 +107,13 @@ export default function TrendingVideosPage() {
         description={preview ? `Discovered on ${capitalize(preview.platform)}` : undefined}
         className="overflow-y-auto sm:max-w-4xl"
       >
-        {preview && <VideoPreview video={preview} />}
+        {preview && (
+          <VideoPreview
+            video={preview}
+            clipping={createAnalysis.isPending}
+            onClip={() => clipVideo(preview)}
+          />
+        )}
       </ResponsiveModal>
     </div>
   );
@@ -149,7 +167,15 @@ function DiscoveryCard({
   );
 }
 
-function VideoPreview({ video }: { video: VideoSearchResult }) {
+function VideoPreview({
+  video,
+  clipping,
+  onClip,
+}: {
+  video: VideoSearchResult;
+  clipping: boolean;
+  onClip: () => void;
+}) {
   return (
     <div className="grid gap-6 md:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
       <div className="overflow-hidden rounded-2xl bg-black">
@@ -204,14 +230,15 @@ function VideoPreview({ video }: { video: VideoSearchResult }) {
           </Button>
           <Button
             className="flex-1"
-            onClick={() =>
-              toast.success("Video selected for clipping", {
-                description: "Queue integration will use this normalized video result.",
-              })
-            }
+            disabled={clipping || video.platform !== "youtube"}
+            onClick={onClip}
           >
-            <SparkleIcon />
-            Clip
+            {clipping ? <CircleNotchIcon className="animate-spin" /> : <SparkleIcon />}
+            {clipping
+              ? "Queuing"
+              : video.platform === "youtube"
+                ? "Clip"
+                : "YouTube only"}
           </Button>
         </div>
       </div>

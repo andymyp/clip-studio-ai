@@ -31,6 +31,31 @@ export type VideoSearchResult = {
   reusable: boolean;
 };
 
+export type GeneratedClip = {
+  id: string;
+  start: number;
+  end: number;
+  score: number;
+  reason: string;
+  output_path: string;
+  media_url: string;
+};
+
+export type ClipAnalysisJob = {
+  id: string;
+  user_id: string;
+  external_id: string;
+  url: string;
+  title: string;
+  platform: string;
+  thumbnail: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  progress: number;
+  message: string;
+  clips: GeneratedClip[];
+  error: string | null;
+};
+
 export type Clip = {
   id: string;
   title: string;

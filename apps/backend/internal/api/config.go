@@ -44,6 +44,7 @@ type Config struct {
 	DiscoveryLimit        int
 	DiscoveryTimeout      time.Duration
 	DiscoveryCacheTTL     time.Duration
+	WorkerAPIURL          string
 }
 
 func LoadConfig() Config {
@@ -92,6 +93,7 @@ func LoadConfig() Config {
 		DiscoveryLimit:       envInt("DISCOVERY_LIMIT", 20),
 		DiscoveryTimeout:     envDuration("DISCOVERY_TIMEOUT", 12*time.Second),
 		DiscoveryCacheTTL:    envDuration("DISCOVERY_CACHE_TTL", 6*time.Hour),
+		WorkerAPIURL:         env("WORKER_API_URL", "http://localhost:3002"),
 	}
 }
 

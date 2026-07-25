@@ -59,6 +59,10 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 		cfg.DiscoveryCacheTTL,
 	)
 	handler := NewHandler(videoService, discoveryService, deps.Logger)
+	workerHandler := NewWorkerHandler(
+		service.NewWorkerClient(cfg.WorkerAPIURL, discoveryHTTPClient),
+		deps.Logger,
+	)
 	authHandler := NewAuthHandler(deps.Auth, deps.Logger)
 	eventHandler := sse.NewHandler(deps.Repositories.AnalysisJobs, deps.Logger)
 
@@ -90,6 +94,13 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 	videos := router.Group("/videos")
 	videos.Use(middleware.Authenticate(deps.Auth))
 	videos.GET("/search", handler.SearchVideos)
+
+	clips := router.Group("/clips")
+	clips.Use(middleware.Authenticate(deps.Auth))
+	clips.POST("/analyze", workerHandler.CreateAnalysis)
+	clips.GET("/jobs/:id", workerHandler.GetAnalysis)
+	clips.GET("/reviews/:external_id", workerHandler.GetReview)
+	clips.GET("/reviews/:external_id/events", workerHandler.AnalysisEvents)
 
 	api := router.Group("/api")
 	api.Use(middleware.Authenticate(deps.Auth))

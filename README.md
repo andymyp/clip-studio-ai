@@ -10,7 +10,8 @@ worker tooling, and local or containerized development workflows.
 - Frontend: Next.js 16, TypeScript, Tailwind CSS 4, shadcn/ui, TanStack Query,
   Axios, Zustand, React Hook Form, Zod, Sonner, and BProgress
 - Backend: Go 1.26.4, Gin, GORM, PostgreSQL, Redis, Asynq, and SSE
-- Worker: Python 3.14 container runtime, FastAPI, FFmpeg, yt-dlp, and Faster Whisper
+- Worker: Python 3.14 container runtime, FastAPI, Redis, FFmpeg, yt-dlp, and
+  Ollama (`qwen2.5:7b`)
 - Infrastructure: Docker Compose, PostgreSQL 16, Redis 7, and Ollama
 - Monorepo tooling: pnpm and Turborepo
 
@@ -225,7 +226,8 @@ pnpm dev:backend
 pnpm dev:worker-api
 ```
 
-The asynchronous job process is optional at this foundation stage:
+Run the asynchronous job process to extract transcripts, rank moments, and
+create partial clip files:
 
 ```powershell
 pnpm dev:worker-jobs
@@ -235,9 +237,9 @@ Other combined modes:
 
 | Command         | Services started                                          |
 | --------------- | --------------------------------------------------------- |
-| `pnpm dev`      | Frontend, backend, and worker API                         |
+| `pnpm dev`      | Frontend, backend, worker API, and background job process |
 | `pnpm dev:all`  | Infrastructure followed by `pnpm dev`                     |
-| `pnpm dev:full` | Frontend, backend, worker API, and background job process |
+| `pnpm dev:full` | Alias for `pnpm dev`                                      |
 
 `pnpm dev:full` does not start infrastructure automatically. Run
 `pnpm infra:up` first.
@@ -255,7 +257,42 @@ Other combined modes:
 | Ollama         | http://localhost:11434       |
 
 Ollama models are not downloaded automatically. Pull the configured model when
-it is first required.
+it is first required:
+
+```powershell
+docker compose --env-file .env.root exec ollama ollama pull qwen2.5:7b
+```
+
+YouTube extraction uses Node 22 or newer, Chrome request impersonation, request
+pacing, exponential retries, and one dedicated Netscape-format cookie file.
+Terminal development reads the repository-local secret:
+
+```dotenv
+YTDLP_COOKIE_FILE=../../storage/secrets/youtube-cookies.txt
+```
+
+Export a dedicated YouTube session to
+`storage/secrets/youtube-cookies.txt`. Follow yt-dlp's private-session export
+procedure: sign in from a private browser window, navigate in the same tab to
+`https://www.youtube.com/robots.txt`, export only YouTube cookies in Netscape
+format with a trusted local exporter, then close that private session
+permanently.
+
+Compose mounts the same host file read-only as a Docker secret and changes only
+its in-container path:
+
+```dotenv
+YTDLP_COOKIE_FILE=/run/secrets/youtube_cookies
+```
+
+The host location can be changed in `.env.root`:
+
+```dotenv
+YTDLP_COOKIE_FILE_HOST=./storage/secrets/youtube-cookies.txt
+```
+
+Cookie files and `storage/secrets/*` are excluded from Git and Docker build
+contexts. Never commit, bake into an image, log, or share the cookie file.
 
 ### Frontend routes
 
@@ -266,6 +303,7 @@ it is first required.
 | `/dashboard`             | Workspace overview and suggested sources |
 | `/clips`                 | Searchable generated-clips library       |
 | `/clips/trending-videos` | YouTube and Reddit discovery results     |
+| `/clips/review/:externalId` | Cached clip preview and multi-select    |
 | `/logs`                  | Backend clip-analysis queue status       |
 
 Dashboard routes are client-protected and use Axios JWT refresh interceptors.
@@ -283,10 +321,13 @@ persists only the authenticated session.
 | GET    | `/videos/search`                 | Discover trending YouTube and Reddit videos  |
 | GET    | `/videos/search?keyword=podcast` | Search YouTube and Reddit videos             |
 | GET    | `/videos/search?url=https://...` | Resolve one supported YouTube or Reddit link |
+| POST   | `/clips/analyze`                  | Queue subtitle extraction and clip analysis   |
+| GET    | `/clips/reviews/:externalId`       | Read a cached video review                     |
+| GET    | `/clips/reviews/:externalId/events` | Stream review progress using SSE              |
 | GET    | `/api/jobs/:id/events`           | Stream analysis progress using SSE           |
 | GET    | `/api/logs`                      | List authenticated queue-job status          |
 
-All `/videos/*` and `/api/*` routes require an access token:
+All `/videos/*`, `/clips/*`, and `/api/*` routes require an access token:
 
 ```text
 Authorization: Bearer <access_token>
@@ -356,11 +397,49 @@ reusable.
 From `/clips`, **Search Trending** opens the discovery page with trending
 results. **Clip By Link** resolves the submitted link on the same page. A
 result can be previewed in a responsive modal—YouTube uses an embed and Reddit
-uses its hosted video stream—and then selected with the **Clip** button.
+uses its hosted video stream. Selecting **Clip** queues a YouTube analysis job
+and opens its progress page.
 
-The analysis queue foundation uses the task type `video:analyze`; its JSON
-payload contains `job_id` and `video_id`. Run `pnpm dev:worker-jobs` when a
-task producer and consumer are connected.
+### Transcript and clip pipeline
+
+The Python worker processes a queued YouTube video in three stages:
+
+1. `TranscriptService` invokes yt-dlp with `--skip-download`,
+   `--write-auto-subs`, and `--write-subs`. It requests English VTT subtitles
+   without downloading video media, then converts VTT cues into JSON:
+
+   ```json
+   [
+     {
+       "text": "A useful standalone thought.",
+       "start": 120,
+       "end": 125
+     }
+   ]
+   ```
+
+2. `ClipRankingService` sends the transcript JSON to Ollama using
+   `qwen2.5:7b`. Candidates are scored for hook strength, emotion, curiosity,
+   replay probability, and information density. Only complete moments between
+   20 and 60 seconds are accepted.
+3. `PartialDownloaderService` invokes yt-dlp separately for each accepted
+   range using `--download-sections`, the FFmpeg downloader, and
+   `--force-keyframes-at-cuts`. It never requests a full-video download.
+
+Job state and results are stored in Redis for seven days. Generated transcript
+JSON is written under `storage/output/transcripts/`, and partial MP4 files are
+written under `storage/output/clips/<job-id>/`.
+
+Completed reviews are cached per user and source-video `external_id` for 30
+days. Selecting **Clip** again reuses that successful result and its generated
+media. Failed analysis jobs are not cached; their transcript JSON and entire
+per-job clip directory are deleted before the failed state is published.
+
+The review page receives job updates over an authenticated SSE stream, previews
+every generated partial clip, and
+allows multiple candidates to be selected. The **Render selected** control
+records the intended selection in the UI only; rendering is deliberately not
+implemented yet.
 
 SSE messages use the job status as the event name and send progress as JSON:
 
@@ -376,8 +455,8 @@ Compose allows a 15-second grace period before forcing the container to stop.
 
 ## Full Docker stack
 
-After creating the environment files with `pnpm bootstrap`, build and start all six
-services:
+After creating the environment files with `pnpm bootstrap`, build and start
+all seven services:
 
 ```powershell
 pnpm docker:up
@@ -435,6 +514,11 @@ Included:
 - infrastructure clients;
 - health endpoints;
 - normalized YouTube and Reddit video discovery without downloading media;
+- YouTube VTT subtitle extraction without downloading source media;
+- VTT-to-JSON transcript conversion;
+- Ollama clip ranking with `qwen2.5:7b`;
+- section-only MP4 downloads for ranked moments;
+- generated-clip preview and multi-selection;
 - queued analysis jobs and SSE progress events;
 - JWT registration, login, rotating refresh tokens, and Bearer middleware;
 - responsive sign-in, sign-up, dashboard, clips, discovery, preview, and
@@ -445,9 +529,8 @@ Included:
 Deferred:
 
 - uploads and media ingestion;
-- persisting a discovery result when the Clip button is selected;
-- analysis task processing;
-- transcription and AI pipelines;
+- render processing and final 9:16 composition;
+- persisting worker clip candidates into PostgreSQL;
 - prompt management and clip editing interfaces.
 
 See [docs/architecture.md](docs/architecture.md) for the intended service

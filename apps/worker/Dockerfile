@@ -1,3 +1,5 @@
+FROM node:24-bookworm-slim AS node-runtime
+
 FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -10,6 +12,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 WORKDIR /app
 
 COPY pyproject.toml ./
