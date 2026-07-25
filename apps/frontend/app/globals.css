@@ -131,6 +131,13 @@
     @apply min-h-screen bg-background text-foreground antialiased;
   }
 
+  body[data-scroll-locked] {
+    margin-right: 0 !important;
+    padding-right: var(--removed-body-scroll-bar-size, 0px) !important;
+    overflow: hidden !important;
+    background-color: #f7f5f2;
+  }
+
   ::selection {
     @apply bg-violet-200 text-violet-950;
   }

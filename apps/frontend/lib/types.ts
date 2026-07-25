@@ -13,6 +13,24 @@ export type Video = {
   created_at?: string;
 };
 
+export type VideoSearchResult = {
+  external_id: string;
+  platform: "youtube" | "reddit";
+  category_id: string;
+  title: string;
+  url: string;
+  embed_url: string;
+  media_url: string;
+  thumbnail: string;
+  duration: number;
+  views: number;
+  likes: number;
+  comments: number;
+  score: number;
+  license: string;
+  reusable: boolean;
+};
+
 export type Clip = {
   id: string;
   title: string;

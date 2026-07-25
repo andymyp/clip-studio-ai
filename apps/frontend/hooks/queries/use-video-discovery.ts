@@ -3,15 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { VideoSearchResult } from "@/lib/types";
 
-export function useVideoSearch(keyword: string, enabled = true) {
+type DiscoveryParams = {
+  keyword?: string;
+  url?: string;
+};
+
+export function useVideoDiscovery(params: DiscoveryParams) {
   return useQuery({
-    queryKey: ["videos", "search", keyword],
+    queryKey: ["video-discovery", params],
     queryFn: async () => {
       const { data } = await api.get<VideoSearchResult[]>("/videos/search", {
-        params: { keyword },
+        params,
       });
       return data;
     },
-    enabled: enabled && keyword.trim().length >= 2,
   });
 }

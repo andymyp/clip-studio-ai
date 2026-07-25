@@ -11,7 +11,7 @@ import (
 
 func TestHealth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	handler := NewHandler(nil, zap.NewNop())
+	handler := NewHandler(nil, nil, zap.NewNop())
 	router := gin.New()
 	router.GET("/health", handler.Health)
 	recorder := httptest.NewRecorder()

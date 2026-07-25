@@ -8,16 +8,13 @@ import {
   TrendUpIcon as TrendUp,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useState } from "react";
 
 import { PageHeading } from "@/components/page-heading";
 import { VideoCard } from "@/components/video-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiErrorMessage } from "@/lib/api";
-import { useAnalyzeVideo } from "@/hooks/mutations/use-analyze-video";
 import { useVideoSearch } from "@/hooks/queries/use-video-search";
-import type { Video } from "@/lib/types";
 import { useAuthStore } from "@/stores/auth-store";
 
 const stats = [
@@ -46,17 +43,7 @@ const stats = [
 
 export default function DashboardPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
-  const [analyzingID, setAnalyzingID] = useState<string>();
   const videos = useVideoSearch("podcast", Boolean(accessToken));
-  const analyze = useAnalyzeVideo();
-
-  function analyzeVideo(video: Video) {
-    if (!video.id) return;
-    setAnalyzingID(video.id);
-    analyze.mutate(video.id, {
-      onSettled: () => setAnalyzingID(undefined),
-    });
-  }
 
   const recentVideos = videos.data?.slice(0, 6) ?? [];
 
@@ -124,10 +111,8 @@ export default function DashboardPage() {
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {recentVideos.map((video) => (
               <VideoCard
-                key={video.id ?? video.url}
+                key={`${video.platform}-${video.external_id}`}
                 video={video}
-                analyzing={analyzingID === video.id}
-                onAnalyze={analyzeVideo}
               />
             ))}
           </div>

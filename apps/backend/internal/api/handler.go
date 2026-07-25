@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -15,22 +16,15 @@ import (
 )
 
 type Handler struct {
-	videos   *service.Service
-	validate *validator.Validate
-	logger   *zap.Logger
+	videos    *service.Service
+	discovery *service.DiscoveryService
+	validate  *validator.Validate
+	logger    *zap.Logger
 }
 
 type searchQuery struct {
-	Keyword string `validate:"required,min=2,max=100"`
-}
-
-type videoSearchResponse struct {
-	ID        uuid.UUID `json:"id"`
-	Title     string    `json:"title"`
-	URL       string    `json:"url"`
-	Thumbnail string    `json:"thumbnail"`
-	Views     int64     `json:"views"`
-	Platform  string    `json:"platform"`
+	Keyword string `validate:"omitempty,min=2,max=100"`
+	URL     string `validate:"omitempty,url,max=2048"`
 }
 
 type videoDetailResponse struct {
@@ -69,10 +63,11 @@ type jobLogResponse struct {
 
 func NewHandler(
 	videos *service.Service,
+	discovery *service.DiscoveryService,
 	logger *zap.Logger,
 ) *Handler {
 	return &Handler{
-		videos: videos, validate: validator.New(), logger: logger,
+		videos: videos, discovery: discovery, validate: validator.New(), logger: logger,
 	}
 }
 
@@ -81,30 +76,40 @@ func (handler *Handler) Health(c *gin.Context) {
 }
 
 func (handler *Handler) SearchVideos(c *gin.Context) {
-	query := searchQuery{Keyword: strings.TrimSpace(c.Query("keyword"))}
+	query := searchQuery{
+		Keyword: strings.TrimSpace(c.Query("keyword")),
+		URL:     strings.TrimSpace(c.Query("url")),
+	}
 	if err := handler.validate.Struct(query); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse{
-			Error: "keyword must contain between 2 and 100 characters",
+			Error: "keyword must contain 2 to 100 characters and url must be valid",
 		})
 		return
 	}
-
-	userID, _ := middleware.UserID(c)
-	videos, err := handler.videos.Search(c.Request.Context(), userID, query.Keyword)
+	if query.Keyword != "" && query.URL != "" {
+		c.JSON(http.StatusBadRequest, errorResponse{
+			Error: "provide either keyword or url, not both",
+		})
+		return
+	}
+	results, err := handler.discovery.Discover(
+		c.Request.Context(), query.Keyword, query.URL,
+	)
 	if err != nil {
+		if errors.Is(err, service.ErrUnsupportedVideoURL) {
+			c.JSON(http.StatusBadRequest, errorResponse{Error: "unsupported video URL"})
+			return
+		}
+		if errors.Is(err, service.ErrDiscoveryUnavailable) {
+			c.JSON(http.StatusServiceUnavailable, errorResponse{
+				Error: "video discovery providers are not configured",
+			})
+			return
+		}
 		writeError(c, handler.logger, err)
 		return
 	}
-
-	response := make([]videoSearchResponse, 0, len(videos))
-	for _, video := range videos {
-		response = append(response, videoSearchResponse{
-			ID:    video.ID,
-			Title: video.Title, URL: video.URL, Thumbnail: video.Thumbnail,
-			Views: video.Views, Platform: video.Platform,
-		})
-	}
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, results)
 }
 
 func (handler *Handler) GetVideo(c *gin.Context) {

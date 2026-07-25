@@ -44,5 +44,18 @@ export const videoSearchSchema = z.object({
     .max(100, "Search must contain at most 100 characters."),
 });
 
+export const clipByLinkSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .min(1, "Video link is required.")
+    .url("Enter a valid video URL.")
+    .refine(
+      (value) => value.startsWith("https://") || value.startsWith("http://"),
+      "Link must start with http:// or https://.",
+    ),
+});
+
 export type AuthValues = z.infer<typeof authSchema>;
+export type ClipByLinkValues = z.infer<typeof clipByLinkSchema>;
 export type VideoSearchValues = z.infer<typeof videoSearchSchema>;
