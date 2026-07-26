@@ -61,6 +61,9 @@ export type ClipByLinkValues = z.infer<typeof clipByLinkSchema>;
 
 export const renderClipsSchema = z.object({
   watermark_text: z.string().trim().max(100, "Use 100 characters or fewer."),
+  rights_confirmed: z
+    .boolean()
+    .refine((value) => value, "Confirm that you have permission to reuse this content."),
 });
 
 export type RenderClipsValues = z.infer<typeof renderClipsSchema>;
@@ -74,6 +77,10 @@ export const performanceFeedbackSchema = z.object({
   shares: z.number().int().min(0),
   average_watch_seconds: z.number().min(0),
   completion_percentage: z.number().min(0).max(100),
+  engaged_views: z.number().int().min(0),
+  swiped_away_percentage: z.number().min(0).max(100),
+  replays: z.number().int().min(0),
+  dropoff_second: z.number().min(0),
 });
 
 export type PerformanceFeedbackValues = z.infer<typeof performanceFeedbackSchema>;

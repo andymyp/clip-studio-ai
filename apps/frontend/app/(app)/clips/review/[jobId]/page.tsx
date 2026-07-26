@@ -39,7 +39,10 @@ export default function ReviewClipsPage() {
   const createRenders = useCreateRenders();
   const renderForm = useForm<RenderClipsValues>({
     resolver: zodResolver(renderClipsSchema),
-    defaultValues: { watermark_text: "" },
+    defaultValues: {
+      watermark_text: "",
+      rights_confirmed: false,
+    },
   });
 
   function submitRender(values: RenderClipsValues) {
@@ -48,6 +51,7 @@ export default function ReviewClipsPage() {
         external_id: externalID,
         clip_ids: [...selected],
         watermark_text: values.watermark_text,
+        rights_confirmed: values.rights_confirmed,
       },
       {
         onSuccess: (jobs) => {
@@ -152,6 +156,37 @@ export default function ReviewClipsPage() {
                       <Input placeholder="@yourbrand" maxLength={100} {...field} />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                <p className="text-sm font-semibold text-violet-950">
+                  Smart AI Auto Crop
+                </p>
+                <p className="mt-1 text-xs leading-5 text-violet-800">
+                  Tracks the active speaker, faces, objects, and action, then applies
+                  smooth full-screen pan and zoom automatically.
+                </p>
+              </div>
+              <FormField
+                control={renderForm.control}
+                name="rights_confirmed"
+                render={({ field }) => (
+                  <FormItem className="mt-5 flex items-start gap-3 rounded-xl border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        aria-label="Confirm content reuse rights"
+                      />
+                    </FormControl>
+                    <div>
+                      <FormLabel>I have permission to reuse this content</FormLabel>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Confirm the source license or creator permission before rendering.
+                      </p>
+                      <FormMessage />
+                    </div>
                   </FormItem>
                 )}
               />

@@ -57,25 +57,31 @@ class RetentionEditService:
         intervals: list[EditInterval],
     ) -> list[TranscriptSegment]:
         result: list[TranscriptSegment] = []
+        timeline: list[tuple[EditInterval, float]] = []
         elapsed = 0.0
         for interval in intervals:
-            for segment in transcript:
+            timeline.append((interval, elapsed))
+            elapsed += interval.end - interval.start
+
+        for segment in transcript:
+            text = segment.text.strip()
+            if text.lower().strip(".,!? ") in FILLERS:
+                continue
+            overlaps: list[tuple[float, float, float]] = []
+            for interval, offset in timeline:
                 start = max(segment.start, interval.start)
                 end = min(segment.end, interval.end)
-                if end <= start:
-                    continue
-                text = segment.text.strip()
-                if text.lower().strip(".,!? ") in FILLERS:
-                    continue
-                result.append(
-                    TranscriptSegment(
-                        text=text,
-                        start=elapsed + start - interval.start,
-                        end=elapsed + end - interval.start,
-                    )
-                )
-            elapsed += interval.end - interval.start
-        return result
+                if end > start:
+                    overlaps.append((end - start, offset + start - interval.start, offset + end - interval.start))
+            if not overlaps:
+                continue
+            # A subtitle cue spanning an edit boundary must be emitted once,
+            # using the retained side containing most of the spoken cue.
+            _duration, mapped_start, mapped_end = max(overlaps, key=lambda item: item[0])
+            result.append(
+                TranscriptSegment(text=text, start=mapped_start, end=mapped_end)
+            )
+        return sorted(result, key=lambda item: item.start)
 
 
 def _invert(cuts: list[tuple[float, float]], duration: float) -> list[EditInterval]:

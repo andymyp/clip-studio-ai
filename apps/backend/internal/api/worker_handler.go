@@ -25,6 +25,8 @@ type analyzeDiscoveredVideoRequest struct {
 	Platform        string `json:"platform" validate:"required,oneof=youtube"`
 	Thumbnail       string `json:"thumbnail" validate:"omitempty,url,max=2048"`
 	YouTubeUsername string `json:"youtube_username" validate:"omitempty,max=100"`
+	License         string `json:"license" validate:"omitempty,max=100"`
+	Reusable        bool   `json:"reusable"`
 }
 
 func NewWorkerHandler(worker *service.WorkerClient, logger *zap.Logger) *WorkerHandler {
@@ -52,6 +54,7 @@ func (handler *WorkerHandler) CreateAnalysis(c *gin.Context) {
 		URL: request.URL, Title: request.Title,
 		Platform: request.Platform, Thumbnail: request.Thumbnail,
 		YouTubeUsername: request.YouTubeUsername,
+		License: request.License, Reusable: request.Reusable,
 	})
 	if err != nil {
 		writeError(c, handler.logger, err)

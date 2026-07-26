@@ -3,7 +3,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import type { RenderJob } from "@/lib/types";
 import { useAuthStore } from "@/stores/auth-store";
 
 const apiURL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -51,7 +50,10 @@ export function useRenderJobEvents() {
               if (payload) {
                 const jobs = JSON.parse(payload) as unknown;
                 if (Array.isArray(jobs)) {
-                  queryClient.setQueryData<RenderJob[]>(["render-jobs"], jobs);
+                  await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: ["render-jobs"] }),
+                    queryClient.invalidateQueries({ queryKey: ["rendered-clips"] }),
+                  ]);
                 }
               }
               boundary = buffer.indexOf("\n\n");

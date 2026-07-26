@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.schemas import EditInterval
+from app.services.audio import mastering_filter
 
 
 class RenderError(RuntimeError):
@@ -29,11 +30,17 @@ class RenderService:
         intro_silence: float = 2.0,
         outro_silence: float = 1.2,
         playback_speed: float = 1.0,
+        audio_measurement: dict[str, float] | None = None,
+        platform_profile: str = "youtube",
+        layouts: list[str] | None = None,
+        zooms: list[float] | None = None,
     ) -> Path:
         output.parent.mkdir(parents=True, exist_ok=True)
         progress(55, "Rendering retention-optimized vertical video")
         intervals = intervals or [EditInterval(start=0, end=86_400)]
         centers = face_centers or [0.5] * len(intervals)
+        layouts = layouts or ["crop"] * len(intervals)
+        zooms = zooms or [1.04] * len(intervals)
         graph: list[str] = []
         concat_inputs: list[str] = []
         for index, interval in enumerate(intervals):
@@ -46,14 +53,49 @@ class RenderService:
                 f"{previous:.4f}+({center:.4f}-{previous:.4f})"
                 f"*({easing})"
             )
-            graph.append(
-                f"[0:v]trim=start={interval.start:.3f}:end={interval.end:.3f},"
-                f"setpts=(PTS-STARTPTS)/{playback_speed:.3f},"
-                "scale=-2:1920:flags=lanczos,"
-                f"crop=1080:1920:x='max(0,min(iw-1080,(iw-1080)*({pan})))':"
-                f"y=(ih-1920)/2,setsar=1,fps=30000/1001,format=yuv420p"
-                f"[v{index}]"
+            target_zoom = zooms[index] if index < len(zooms) else 1.04
+            previous_zoom = (
+                zooms[index - 1]
+                if index > 0 and index - 1 < len(zooms)
+                else 1.0
             )
+            zoom = f"{previous_zoom:.4f}+({target_zoom:.4f}-{previous_zoom:.4f})*({easing})"
+            scale_height = f"1920*({zoom})"
+            opening_fade = ",fade=t=in:st=0:d=0.18" if index == 0 else ""
+            if index < len(layouts) and layouts[index] == "fit":
+                graph.extend(
+                    [
+                        (
+                            f"[0:v]trim=start={interval.start:.3f}:end={interval.end:.3f},"
+                            f"setpts=(PTS-STARTPTS)/{playback_speed:.3f},"
+                            f"split=2[bgraw{index}][fgraw{index}]"
+                        ),
+                        (
+                            f"[bgraw{index}]scale=1080:1920:"
+                            "force_original_aspect_ratio=increase:flags=lanczos,"
+                            f"crop=1080:1920,boxblur=30:10[bg{index}]"
+                        ),
+                        (
+                            f"[fgraw{index}]scale=1080:1920:"
+                            f"force_original_aspect_ratio=decrease:flags=lanczos[fg{index}]"
+                        ),
+                        (
+                            f"[bg{index}][fg{index}]overlay=(W-w)/2:(H-h)/2,"
+                            "setsar=1,fps=30000/1001,format=yuv420p"
+                            f"{opening_fade}[v{index}]"
+                        ),
+                    ]
+                )
+            else:
+                graph.append(
+                    f"[0:v]trim=start={interval.start:.3f}:end={interval.end:.3f},"
+                    f"setpts=(PTS-STARTPTS)/{playback_speed:.3f},"
+                    f"scale=-2:'{scale_height}':flags=lanczos:eval=frame,"
+                    f"crop=1080:1920:x='max(0,min(iw-1080,(iw-1080)*({pan})))':"
+                    f"y=(ih-1920)/2,setsar=1,fps=30000/1001,format=yuv420p"
+                    f"{opening_fade}"
+                    f"[v{index}]"
+                )
             graph.append(
                 f"[0:a]atrim=start={interval.start:.3f}:end={interval.end:.3f},"
                 f"asetpts=PTS-STARTPTS,atempo={playback_speed:.3f},"
@@ -69,7 +111,8 @@ class RenderService:
         rendered_outro = outro_silence / playback_speed
         outro_start = max(rendered_intro, output_duration - rendered_outro)
         graph.append(
-            f"[acat]volume=0:enable='between(t,0,{rendered_intro:.3f})',"
+            f"[acat]{mastering_filter(audio_measurement or {})},"
+            f"volume=0:enable='between(t,0,{rendered_intro:.3f})',"
             f"volume=0:enable='gte(t,{outro_start:.3f})'[aout]"
         )
         overlays = [f"ass='{_escape_filter_path(subtitle)}'"]
@@ -83,7 +126,7 @@ class RenderService:
                     size=_fit_title_font_size(hook_text),
                     enable=f"between(t,0,{rendered_intro:.3f})",
                     border_width=7,
-                    line_spacing=4,
+                    line_spacing=-6,
                     text_align="C",
                 )
             )
@@ -98,6 +141,11 @@ class RenderService:
                 )
             )
         source = source_username.strip() or "YouTube"
+        source_bottom = {
+            "youtube": 95,
+            "tiktok": 165,
+            "instagram": 135,
+        }.get(platform_profile, 95)
         overlays.append(
             _drawtext_file(
                 _write_overlay(
@@ -105,7 +153,7 @@ class RenderService:
                     f"Source: YT {source}",
                     wrap=False,
                 ),
-                "h-text_h-95",
+                f"h-text_h-{source_bottom}",
                 size=40,
                 boxed=True,
             )
@@ -140,6 +188,7 @@ def _write_overlay(path: Path, text: str, wrap: bool = True) -> Path:
 def _write_title_overlay(path: Path, text: str) -> Path:
     clean = re.sub(r"[*_`#]+", "", text)
     clean = " ".join(clean.replace("\r", " ").replace("\n", " ").split())
+    clean = clean.rstrip(" .,:;!-")
     path.write_text(_wrap_title(clean), encoding="utf-8")
     return path
 
@@ -166,12 +215,12 @@ def _drawtext_file(
     )
 
 
-def _fit_title_font_size(wrapped_text: str, maximum: int = 112, minimum: int = 58) -> int:
+def _fit_title_font_size(wrapped_text: str, maximum: int = 128, minimum: int = 72) -> int:
     longest = max((len(line) for line in wrapped_text.splitlines()), default=1)
-    return max(minimum, min(maximum, round(1_650 / max(longest, 1))))
+    return max(minimum, min(maximum, round(2_000 / max(longest, 1))))
 
 
-def _wrap_title(text: str, maximum_lines: int = 3) -> str:
+def _wrap_title(text: str, maximum_lines: int = 2) -> str:
     words = text.replace("\r", " ").replace("\n", " ").split()
     if not words:
         return ""

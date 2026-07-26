@@ -330,8 +330,17 @@ persists only the authenticated session.
 | POST   | `/clips/analyze`                  | Queue subtitle extraction and clip analysis   |
 | GET    | `/clips/reviews/:externalId`       | Read a cached video review                     |
 | GET    | `/clips/reviews/:externalId/events` | Stream review progress using SSE              |
+| GET    | `/clips/rendered`                 | Paginated rendered clips library              |
+| GET    | `/renders`                       | Paginated render jobs                         |
+| GET    | `/renders/events`                | Stream render-job changes using SSE           |
 | GET    | `/api/jobs/:id/events`           | Stream analysis progress using SSE           |
 | GET    | `/api/logs`                      | List authenticated queue-job status          |
+
+`/clips/rendered` accepts `page`, `page_size`, `search`, and
+`sort=newest|oldest|score`. `/renders` accepts `page`, `page_size`,
+`status=queued|pending|processing|completed|failed|cancelled`, and
+`sort=newest|oldest|progress`. Filtering, ordering, counting, and pagination
+are applied by PostgreSQL; the frontend renders the returned page as-is.
 
 All `/videos/*`, `/clips/*`, and `/api/*` routes require an access token:
 
@@ -454,10 +463,42 @@ Each render produces one best-potential master cut. Before encoding, the worker
 detects and removes dead air and filler-only segments, samples the dominant face
 for speaker-aware vertical reframing, inserts subtle visual beats, generates a
 truthful opening hook, and emphasizes important phrases in the ASS captions.
+Packaging first extracts a structured main-context brief containing the topic,
+central claim, and payoff from the full selected transcript and source title.
+It then produces three title candidates and three independent hook candidates
+and scores their relevance to that brief before editorial validation. Publishing
+titles must be accurate, concise, payoff-led, and front-loaded; opening hooks
+must be 3-6 words, distinct from both the title and dialogue, and free of
+Markdown, generic clickbait, fragments, repeated words, or excessive capitals.
+Invalid AI output is replaced with separate deterministic title and hook
+fallbacks rather than copied transcript text.
 Review sections request the best compatible source up to 1080p. Final exports
 use Lanczos scaling, eased subject-following pans, short safe-area captions,
 larger boxed branding, the discovered YouTube handle, and high-quality H.264
 CRF 17 / AAC 192 kbps encoding.
+
+The upgraded pipeline snaps AI candidates to transcript sentence boundaries,
+uses sentence endings for visual beats, samples faces at three points per shot,
+locks small camera movements, and limits pan velocity. The opening uses a subtle
+push-in and fade while keeping the hook card brief. Caption chunks break on
+clauses, avoid orphan words, and allocate at least 700 ms when the timeline
+permits. Exact duplicate cues, progressive subtitle overlap, and cues spanning
+an edit boundary are collapsed before ASS generation.
+
+Every render uses Smart AI Auto Crop; there is no manual render-profile choice.
+The reframe planner samples each semantic shot, identifies the most active face
+from face size and mouth-region activity, falls back to object contours and
+frame-motion action detection, and produces a full-screen 9:16 crop. Pan and
+zoom are eased, velocity-limited, and stabilized with dead zones so the camera
+tracks meaningful movement rather than floating.
+
+Audio is mastered in two passes. FFmpeg first measures loudness and then applies
+an 80 Hz high-pass filter, light denoising, voice compression, EBU R128
+normalization to -16 LUFS / -1.5 dBTP, and a true-peak limiter. After encoding,
+the worker runs an FFprobe/FFmpeg quality gate that verifies 1080x1920 output,
+audio presence, planned duration, audio/video drift, black frames, frozen
+frames, and complete decodability. Failed validation marks the render failed
+instead of publishing a broken file.
 Ranked moments include a two-second context lead-in and a 1.2-second context
 tail. The renderer preserves those frames, mutes audio in both edge buffers,
 shows a large, outlined, subtitle-style hook in the center without a background
@@ -472,11 +513,19 @@ is preserved; naturally paced dialogue remains at its original speed.
 Published view, engagement, watch-time, and completion metrics can be recorded
 from the clip preview. These produce a viral score and teach later analyses the
 duration range that has performed best.
+Performance feedback also accepts engaged views, swipe-away percentage,
+replays, and the primary drop-off timestamp. These signals influence learned
+duration weighting. Source license and reusable status are retained from
+discovery, and the render dialog requires explicit confirmation that the user
+has permission to reuse the content.
 
-The background worker handles `SIGINT` and `SIGTERM` gracefully: it stops
-dequeueing new work, finishes and acknowledges the active job, closes Redis,
-and recovers jobs left in processing queues on the next startup. Docker grants
-render workers up to 15 minutes to finish an active FFmpeg render.
+The backend and background worker use two-stage shutdown. The first `SIGINT` or
+`SIGTERM` stops new intake and drains active HTTP requests or the current media
+job. A second signal force-closes the backend; the worker interrupts the active
+job and returns it to Redis so it can be recovered on the next start. Both
+processes close database and Redis connections before exiting. On Windows the
+job worker also handles `SIGBREAK`. Docker grants render workers up to 15
+minutes to finish an active FFmpeg render.
 
 SSE messages use the job status as the event name and send progress as JSON:
 

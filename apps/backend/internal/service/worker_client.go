@@ -23,6 +23,8 @@ type WorkerAnalyzeRequest struct {
 	Platform        string `json:"platform"`
 	Thumbnail       string `json:"thumbnail"`
 	YouTubeUsername string `json:"youtube_username"`
+	License         string `json:"license"`
+	Reusable        bool   `json:"reusable"`
 }
 
 type WorkerClip struct {
@@ -44,6 +46,8 @@ type WorkerAnalysisJob struct {
 	Platform        string       `json:"platform"`
 	Thumbnail       string       `json:"thumbnail"`
 	YouTubeUsername string       `json:"youtube_username"`
+	License         string       `json:"license"`
+	Reusable        bool         `json:"reusable"`
 	Status          string       `json:"status"`
 	Progress        float64      `json:"progress"`
 	Message         string       `json:"message"`
@@ -62,6 +66,9 @@ type WorkerRenderRequest struct {
 	WatermarkText  string  `json:"watermark_text"`
 	SourceURL      string  `json:"source_url"`
 	SourceUsername string  `json:"source_username"`
+	SourceTitle    string  `json:"source_title"`
+	PlatformProfile string `json:"platform_profile"`
+	RightsConfirmed bool `json:"rights_confirmed"`
 }
 
 type WorkerMarketing struct {
@@ -80,6 +87,7 @@ type WorkerRenderJob struct {
 	SubtitlePath string              `json:"subtitle_path"`
 	Marketing    *WorkerMarketing    `json:"marketing"`
 	Optimization *WorkerOptimization `json:"optimization"`
+	Quality      *WorkerQuality      `json:"quality"`
 	Error        *string             `json:"error"`
 }
 
@@ -88,6 +96,15 @@ type WorkerOptimization struct {
 	Hook              string    `json:"hook"`
 	PatternInterrupts []float64 `json:"pattern_interrupts"`
 	PlaybackSpeed     float64   `json:"playback_speed"`
+	AudioLoudnessLUFS float64   `json:"audio_loudness_lufs"`
+}
+
+type WorkerQuality struct {
+	Passed          bool    `json:"passed"`
+	Width           int     `json:"width"`
+	Height          int     `json:"height"`
+	Duration        float64 `json:"duration"`
+	AudioVideoDrift float64 `json:"audio_video_drift"`
 }
 
 func NewWorkerClient(baseURL string, client *http.Client) *WorkerClient {

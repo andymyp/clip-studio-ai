@@ -34,7 +34,8 @@ clips, render jobs, and performance snapshots.
 | ----------------------------------- | -------------------------- |
 | `id`                                | UUID primary key           |
 | `user_id`                           | Indexed user foreign key   |
-| `platform`, `url`                   | Required, unique as a pair |
+| `platform`, `url`                   | Required, unique per user |
+| `license`, `reusable`               | Discovery reuse metadata |
 | `title`, `description`, `thumbnail` | Video metadata             |
 | `duration`                          | Non-negative seconds       |
 | `views`, `likes`, `comments`        | Non-negative counters      |
@@ -64,6 +65,10 @@ clips, render jobs, and performance snapshots.
 | `watermark_text`, `source_url`               | Burn-in configuration        |
 | `title`, `description`, `hashtags`, `hook`   | Generated packaging          |
 | `removed_seconds`, `pattern_interrupts`      | Optimization summary         |
+| `platform_profile`, `rights_confirmed`       | Smart-crop mode and reuse confirmation |
+| `quality_passed`, `output_width`, `output_height` | Automated output validation |
+| `output_duration`, `audio_video_drift`       | Timeline quality measurements |
+| `audio_loudness_lufs`, `playback_speed`      | Audio/readability optimization |
 | `created_at`, `updated_at`                   | Timestamps                   |
 
 ### clip_performances
@@ -76,6 +81,8 @@ clips, render jobs, and performance snapshots.
 | `views`, `likes`, `comments`, `shares`      | Published engagement metrics   |
 | `average_watch_seconds`                     | Average audience watch time    |
 | `completion_percentage`, `viral_score`      | Retention and learned outcome  |
+| `engaged_views`, `swiped_away_percentage`   | Shorts-feed retention signals  |
+| `replays`, `dropoff_second`                  | Replay and timeline feedback   |
 | `created_at`, `updated_at`                   | Timestamps                     |
 
 ## Migrations

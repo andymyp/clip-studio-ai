@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -28,12 +29,9 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	signalContext, stop := signal.NotifyContext(
-		context.Background(),
-		syscall.SIGINT,
-		syscall.SIGTERM,
-	)
-	defer stop()
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signals)
 
 	serverErrors := make(chan error, 1)
 	go func() {
@@ -42,27 +40,50 @@ func main() {
 	}()
 
 	select {
-	case <-signalContext.Done():
+	case received := <-signals:
 		deps.Logger.Info(
 			"shutdown signal received",
+			zap.String("signal", received.String()),
 			zap.Duration("timeout", cfg.ShutdownTimeout),
 		)
 	case serveErr := <-serverErrors:
 		if !errors.Is(serveErr, http.ErrServerClosed) {
-			deps.Logger.Fatal("backend server stopped unexpectedly", zap.Error(serveErr))
+			deps.Logger.Error("backend server stopped unexpectedly", zap.Error(serveErr))
 		}
 		return
 	}
 
 	shutdownContext, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
+	shutdownResult := make(chan error, 1)
+	go func() {
+		shutdownResult <- server.Shutdown(shutdownContext)
+	}()
 
-	if err := server.Shutdown(shutdownContext); err != nil {
-		deps.Logger.Error("graceful shutdown timed out", zap.Error(err))
-		if closeErr := server.Close(); closeErr != nil {
-			deps.Logger.Error("force close server", zap.Error(closeErr))
+	select {
+	case err := <-shutdownResult:
+		if err != nil {
+			deps.Logger.Warn("HTTP drain timed out; force closing", zap.Error(err))
+			forceClose(server, deps.Logger)
+			return
 		}
+		deps.Logger.Info("graceful shutdown completed")
+	case received := <-signals:
+		deps.Logger.Warn(
+			"second shutdown signal received; force closing",
+			zap.String("signal", received.String()),
+		)
+		forceClose(server, deps.Logger)
+	case <-shutdownContext.Done():
+		deps.Logger.Warn("HTTP drain deadline reached; force closing")
+		forceClose(server, deps.Logger)
+	}
+}
+
+func forceClose(server *http.Server, logger *zap.Logger) {
+	if err := server.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Error("force close server", zap.Error(err))
 		return
 	}
-	deps.Logger.Info("graceful shutdown completed")
+	logger.Info("backend server stopped")
 }

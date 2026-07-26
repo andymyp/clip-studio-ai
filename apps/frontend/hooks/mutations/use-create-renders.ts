@@ -11,6 +11,7 @@ export function useCreateRenders() {
       external_id: string;
       clip_ids: string[];
       watermark_text: string;
+      rights_confirmed: boolean;
     }) => {
       progress.start();
       try {

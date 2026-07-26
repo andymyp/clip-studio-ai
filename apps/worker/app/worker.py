@@ -21,9 +21,11 @@ from .schemas import (
     TranscriptSegment,
 )
 from .services import (
+    AudioMasteringService,
     ClipRankingService,
     MarketingGenerator,
     PartialDownloaderService,
+    RenderQualityService,
     RenderService,
     RetentionEditService,
     SubjectReframeService,
@@ -38,14 +40,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 shutdown = threading.Event()
+force_shutdown = threading.Event()
+
+
+class ForcedShutdown(BaseException):
+    """Interrupt an active job after a second termination signal."""
 
 
 def stop(_signum: int, _frame: object) -> None:
     if shutdown.is_set():
-        logger.warning("Shutdown already requested; waiting for the active job to finish")
-        return
+        logger.warning("Second shutdown requested; interrupting and requeueing active work")
+        force_shutdown.set()
+        raise ForcedShutdown
     logger.info("Shutdown requested; stopping intake and finishing the active job")
     shutdown.set()
+
+
+def install_signal_handlers() -> None:
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, stop)
 
 
 class AnalysisJobProcessor:
@@ -115,8 +130,13 @@ class AnalysisJobProcessor:
                 job.message = f"Downloading clip section {index + 1} of {len(ranked)}"
                 self.store.save(job)
                 clip_id = str(uuid4())
-                section_start = max(0, candidate.start - self.context_before)
-                section_end = candidate.end + self.context_after
+                section_start, section_end = _semantic_clip_bounds(
+                    candidate.start,
+                    candidate.end,
+                    transcript,
+                    self.context_before,
+                    self.context_after,
+                )
                 try:
                     output = self.downloader.download(
                         job.url,
@@ -173,8 +193,13 @@ class AnalysisJobProcessor:
                 item = json.loads(raw)
                 score = max(0.0, float(item["viral_score"]))
                 duration = float(item["duration"])
+                swipe = max(0.0, min(100.0, float(item.get("swiped_away_percentage", 0))))
+                engaged = max(0.0, min(100.0, float(item.get("engaged_rate", 0))))
+                replay = max(0.0, min(100.0, float(item.get("replay_rate", 0))))
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 continue
+            score *= max(0.25, 1 - swipe / 125)
+            score *= 1 + min(0.35, (engaged + replay) / 400)
             if (
                 score < 50
                 or not self.ranking.minimum_duration
@@ -207,6 +232,8 @@ class RenderJobProcessor:
         self.store = RenderJobStore(client, settings.render_queue_name)
         self.storage = Path(settings.storage_path).resolve()
         self.subtitles = SubtitleGenerator()
+        self.audio = AudioMasteringService()
+        self.quality = RenderQualityService()
         self.renderer = RenderService()
         self.retention = RetentionEditService()
         self.reframe = SubjectReframeService()
@@ -220,6 +247,8 @@ class RenderJobProcessor:
             return
         output_directory = self.storage / "output" / "rendered" / job.id
         try:
+            if not job.rights_confirmed:
+                raise RuntimeError("Reusable-content rights must be confirmed before rendering")
             job.status = "processing"
             self._progress(job, 10, "Preparing transcript")
             transcript_path = (
@@ -244,8 +273,8 @@ class RenderJobProcessor:
                 raise RuntimeError("Clip path is outside storage")
             duration = job.end - job.start
             self._progress(job, 20, "Removing dead air and filler")
-            intro_silence = min(self.context_before, max(0.6, duration * 0.12))
-            outro_silence = min(self.context_after, max(0.5, duration * 0.08))
+            intro_silence = min(self.context_before, 1.35, max(0.85, duration * 0.06))
+            outro_silence = min(self.context_after, 0.9, max(0.5, duration * 0.05))
             retention_intervals = self.retention.plan(
                 clip,
                 duration,
@@ -253,7 +282,8 @@ class RenderJobProcessor:
                 preserve_start=intro_silence,
                 preserve_end=outro_silence,
             )
-            transcript = self.retention.remap(transcript, retention_intervals)
+            source_transcript = transcript
+            transcript = self.retention.remap(source_transcript, retention_intervals)
             if not transcript:
                 raise RuntimeError("Retention edit removed the entire transcript")
             base_edited_duration = sum(
@@ -276,12 +306,24 @@ class RenderJobProcessor:
 
             # Split long continuous sections into visual beats. Audio remains continuous,
             # while each beat can use an updated face center and subtle punch-in.
-            visual_intervals = _visual_beats(retention_intervals)
+            visual_intervals = _visual_beats(retention_intervals, source_transcript)
             self._progress(job, 30, "Tracking the primary speaker")
-            centers = self.reframe.centers(clip, visual_intervals)
+            centers, layouts, zooms = self.reframe.plan(clip, visual_intervals)
 
             self._progress(job, 38, "Choosing the strongest hook and packaging")
-            job.marketing = self.marketing.generate(transcript)
+            job.marketing = self.marketing.generate(transcript, job.source_title)
+            attribution = " | ".join(
+                value
+                for value in (
+                    job.source_username or "YouTube",
+                    job.source_title,
+                    job.source_url,
+                )
+                if value
+            )
+            job.marketing.description = (
+                f"{job.marketing.description.rstrip()}\n\nSource: {attribution}"
+            )
             important_phrases = [job.marketing.hook, job.marketing.title]
             edited_duration = base_edited_duration / playback_speed
             rendered_intro = intro_silence / playback_speed
@@ -297,11 +339,14 @@ class RenderJobProcessor:
                 caption_transcript,
                 output_directory / "subtitle.ass",
                 important_phrases=important_phrases,
+                platform_profile=job.platform_profile,
             )
             job.subtitle_path = str(subtitle.relative_to(self.storage))
             job.optimization = OptimizationPlan(
                 intervals=visual_intervals,
                 face_centers=centers,
+                layouts=layouts,
+                zooms=zooms,
                 removed_seconds=round(
                     duration - sum(item.end - item.start for item in retention_intervals), 2
                 ),
@@ -311,8 +356,13 @@ class RenderJobProcessor:
                 ],
                 important_phrases=[value for value in important_phrases if value],
                 playback_speed=playback_speed,
+                platform_profile=job.platform_profile,
             )
             self._progress(job, 48, "Dynamic Shorts captions generated")
+            self._progress(job, 52, "Measuring and mastering speech audio")
+            audio_measurement = self.audio.measure(clip)
+            if audio_measurement:
+                job.optimization.audio_loudness_lufs = audio_measurement["input_i"]
             final = self.renderer.render(
                 clip,
                 subtitle,
@@ -327,8 +377,14 @@ class RenderJobProcessor:
                 intro_silence,
                 outro_silence,
                 playback_speed,
+                audio_measurement,
+                job.platform_profile,
+                layouts,
+                zooms,
             )
-            self._progress(job, 94, "Finalizing optimized metadata")
+            self._progress(job, 92, "Validating render quality")
+            job.quality = self.quality.inspect(final, edited_duration)
+            self._progress(job, 96, "Finalizing optimized metadata")
             job.output_path = str(final.relative_to(self.storage))
             job.media_url = f"/media/rendered/{job.id}/final.mp4"
             job.status = "completed"
@@ -348,16 +404,54 @@ class RenderJobProcessor:
         self.store.save(job)
 
 
-def _visual_beats(intervals: list[EditInterval], beat_seconds: float = 7.0) -> list[EditInterval]:
+def _visual_beats(
+    intervals: list[EditInterval],
+    transcript: list[TranscriptSegment] | None = None,
+    minimum_seconds: float = 4.0,
+    maximum_seconds: float = 9.0,
+) -> list[EditInterval]:
     beats: list[EditInterval] = []
     for interval in intervals:
         cursor = interval.start
-        while interval.end - cursor > beat_seconds:
-            beats.append(EditInterval(start=cursor, end=cursor + beat_seconds))
-            cursor += beat_seconds
+        sentence_ends = [
+            segment.end
+            for segment in transcript or []
+            if cursor + minimum_seconds <= segment.end < interval.end
+            and segment.text.rstrip().endswith((".", "!", "?"))
+        ]
+        while interval.end - cursor > maximum_seconds:
+            choices = [
+                value
+                for value in sentence_ends
+                if cursor + minimum_seconds <= value <= cursor + maximum_seconds
+            ]
+            boundary = choices[-1] if choices else min(interval.end, cursor + maximum_seconds)
+            beats.append(EditInterval(start=cursor, end=boundary))
+            cursor = boundary
         if interval.end - cursor >= 0.25:
             beats.append(EditInterval(start=cursor, end=interval.end))
     return beats
+
+
+def _semantic_clip_bounds(
+    start: float,
+    end: float,
+    transcript: list[TranscriptSegment],
+    context_before: float,
+    context_after: float,
+) -> tuple[float, float]:
+    overlapping = [
+        segment for segment in transcript if segment.end > start and segment.start < end
+    ]
+    core_start = overlapping[0].start if overlapping else start
+    core_end = overlapping[-1].end if overlapping else end
+    for segment in transcript:
+        if segment.end < end:
+            continue
+        core_end = segment.end
+        if segment.text.rstrip().endswith((".", "!", "?")) or segment.end >= end + 4:
+            break
+    return max(0, core_start - context_before), core_end + context_after
 
 
 def _readability_speed(
@@ -400,7 +494,10 @@ def run() -> None:
                         break
                     try:
                         processor.process(job_id)
-                    finally:
+                    except ForcedShutdown:
+                        processor.store.release(job_id)
+                        raise
+                    else:
                         processor.store.acknowledge(job_id)
                 if shutdown.is_set():
                     break
@@ -411,11 +508,16 @@ def run() -> None:
                         break
                     try:
                         render_processor.process(render_job_id)
-                    finally:
+                    except ForcedShutdown:
+                        render_processor.store.release(render_job_id)
+                        raise
+                    else:
                         render_processor.store.acknowledge(render_job_id)
             except RedisError:
                 logger.exception("Redis unavailable; retrying in 2 seconds")
                 shutdown.wait(2)
+    except ForcedShutdown:
+        logger.warning("Worker force-stopped; active work was returned to its queue")
     finally:
         logger.info("Closing Redis connections")
         processor.store.client.close()
@@ -424,6 +526,5 @@ def run() -> None:
 
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGTERM, stop)
-    signal.signal(signal.SIGINT, stop)
+    install_signal_handlers()
     run()

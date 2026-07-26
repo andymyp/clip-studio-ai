@@ -25,6 +25,8 @@ class AnalysisJobStore:
             platform=payload.platform,
             thumbnail=payload.thumbnail,
             youtube_username=payload.youtube_username,
+            license=payload.license,
+            reusable=payload.reusable,
             status="queued",
             progress=0,
             message="Queued for subtitle extraction",
@@ -120,4 +122,4 @@ class AnalysisJobStore:
     @staticmethod
     def _review_key(user_id: str, platform: str, external_id: str) -> str:
         # Version the ranking cache so algorithm changes do not serve stale scores.
-        return f"clipstudio:analysis:review:v4:{user_id}:{platform}:{external_id}"
+        return f"clipstudio:analysis:review:v5:{user_id}:{platform}:{external_id}"
