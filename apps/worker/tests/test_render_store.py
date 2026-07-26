@@ -33,11 +33,16 @@ def test_render_recovery_and_acknowledgement() -> None:
 
 def test_render_release_returns_unstarted_job_to_queue() -> None:
     client = Mock()
-    pipe = client.pipeline.return_value
     store = RenderJobStore(client, "renders")
 
     store.release("render-id")
 
-    pipe.lrem.assert_called_once_with("renders:processing", 1, "render-id")
-    pipe.rpush.assert_called_once_with("renders", "render-id")
-    pipe.execute.assert_called_once()
+    script, key_count, processing, queue, job_id = client.eval.call_args.args
+    assert "LREM" in script
+    assert "RPUSH" in script
+    assert (key_count, processing, queue, job_id) == (
+        2,
+        "renders:processing",
+        "renders",
+        "render-id",
+    )

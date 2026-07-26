@@ -74,9 +74,11 @@ func main() {
 			zap.String("signal", received.String()),
 		)
 		forceClose(server, deps.Logger)
+		waitForShutdown(shutdownResult, deps.Logger)
 	case <-shutdownContext.Done():
 		deps.Logger.Warn("HTTP drain deadline reached; force closing")
 		forceClose(server, deps.Logger)
+		waitForShutdown(shutdownResult, deps.Logger)
 	}
 }
 
@@ -86,4 +88,15 @@ func forceClose(server *http.Server, logger *zap.Logger) {
 		return
 	}
 	logger.Info("backend server stopped")
+}
+
+func waitForShutdown(result <-chan error, logger *zap.Logger) {
+	// Server.Close unblocks Shutdown. Wait for that goroutine before deferred
+	// dependency cleanup so an in-flight shutdown cannot outlive its resources.
+	if err := <-result; err != nil &&
+		!errors.Is(err, http.ErrServerClosed) &&
+		!errors.Is(err, context.Canceled) &&
+		!errors.Is(err, context.DeadlineExceeded) {
+		logger.Warn("HTTP shutdown ended with an error", zap.Error(err))
+	}
 }

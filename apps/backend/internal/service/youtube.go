@@ -28,7 +28,6 @@ type YouTubeDiscoveryConfig struct {
 	Region          string
 	Language        string
 	DefaultQuery    string
-	ReusableOnly    bool
 	ExcludeMusic    bool
 	ExcludedTerms   []string
 	DiscoveryWindow time.Duration
@@ -64,10 +63,12 @@ func (provider *YouTubeProvider) Search(
 		"type":            {"video"},
 		"videoEmbeddable": {"true"},
 		"videoSyndicated": {"true"},
+		"chart":           {"mostPopular"},
 		"order":           {"viewCount"},
 		"maxResults":      {"50"},
 		"q":               {provider.discoveryQuery(keyword)},
 		"safeSearch":      {"strict"},
+		"videoLicense":    {"creativeCommon"},
 		"key":             {provider.apiKey},
 	}
 	if provider.config.Region != "" {
@@ -75,9 +76,6 @@ func (provider *YouTubeProvider) Search(
 	}
 	if provider.config.Language != "" {
 		query.Set("relevanceLanguage", provider.config.Language)
-	}
-	if provider.config.ReusableOnly {
-		query.Set("videoLicense", "creativeCommon")
 	}
 	if provider.config.DiscoveryWindow > 0 {
 		query.Set(
@@ -317,9 +315,6 @@ func (provider *YouTubeProvider) filterDiscoveryResults(
 	for _, result := range results {
 		if provider.config.MinimumDuration > 0 &&
 			time.Duration(result.Duration*float64(time.Second)) < provider.config.MinimumDuration {
-			continue
-		}
-		if provider.config.ReusableOnly && !result.Reusable {
 			continue
 		}
 		if provider.config.ExcludeMusic && result.CategoryID == "10" {

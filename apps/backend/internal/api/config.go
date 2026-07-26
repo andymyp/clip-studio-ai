@@ -31,7 +31,6 @@ type Config struct {
 	YouTubeRegion         string
 	YouTubeLanguage       string
 	YouTubeDiscoveryQuery string
-	YouTubeReusableOnly   bool
 	YouTubeExcludeMusic   bool
 	YouTubeExcludedTerms  string
 	YouTubeDiscoveryDays  int
@@ -77,7 +76,6 @@ func LoadConfig() Config {
 			"YOUTUBE_DISCOVERY_QUERY",
 			"podcast|interview|education|business|technology|science|story|debate|speech|documentary",
 		),
-		YouTubeReusableOnly: envBool("YOUTUBE_REUSABLE_ONLY", true),
 		YouTubeExcludeMusic: envBool("YOUTUBE_EXCLUDE_MUSIC", true),
 		YouTubeExcludedTerms: env(
 			"YOUTUBE_EXCLUDED_TERMS",

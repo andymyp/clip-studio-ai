@@ -89,10 +89,20 @@ class AnalysisJobStore:
         self.client.lrem(self.processing_queue_name, 1, job_id)
 
     def release(self, job_id: str) -> None:
-        pipe = self.client.pipeline()
-        pipe.lrem(self.processing_queue_name, 1, job_id)
-        pipe.rpush(self.queue_name, job_id)
-        pipe.execute()
+        # Only put the job back when it is still owned by this worker.  This
+        # keeps forced shutdown idempotent if a signal races with acknowledge().
+        self.client.eval(
+            """
+            if redis.call('LREM', KEYS[1], 1, ARGV[1]) == 1 then
+                return redis.call('RPUSH', KEYS[2], ARGV[1])
+            end
+            return 0
+            """,
+            2,
+            self.processing_queue_name,
+            self.queue_name,
+            job_id,
+        )
 
     def recover_interrupted(self) -> int:
         recovered = 0

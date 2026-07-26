@@ -49,6 +49,9 @@ class ForcedShutdown(BaseException):
 
 def stop(_signum: int, _frame: object) -> None:
     if shutdown.is_set():
+        if force_shutdown.is_set():
+            logger.warning("Forced shutdown is already in progress")
+            return
         logger.warning("Second shutdown requested; interrupting and requeueing active work")
         force_shutdown.set()
         raise ForcedShutdown
@@ -61,6 +64,18 @@ def install_signal_handlers() -> None:
     signal.signal(signal.SIGINT, stop)
     if hasattr(signal, "SIGBREAK"):
         signal.signal(signal.SIGBREAK, stop)
+
+
+def _run_claimed_job(processor: object, job_id: str) -> None:
+    """Process and settle one claimed job without losing it on forced shutdown."""
+    try:
+        processor.process(job_id)  # type: ignore[attr-defined]
+        if force_shutdown.is_set():
+            raise ForcedShutdown
+        processor.store.acknowledge(job_id)  # type: ignore[attr-defined]
+    except ForcedShutdown:
+        processor.store.release(job_id)  # type: ignore[attr-defined]
+        raise
 
 
 class AnalysisJobProcessor:
@@ -492,13 +507,7 @@ def run() -> None:
                     if shutdown.is_set():
                         processor.store.release(job_id)
                         break
-                    try:
-                        processor.process(job_id)
-                    except ForcedShutdown:
-                        processor.store.release(job_id)
-                        raise
-                    else:
-                        processor.store.acknowledge(job_id)
+                    _run_claimed_job(processor, job_id)
                 if shutdown.is_set():
                     break
                 render_job_id = render_processor.store.wait(timeout=1)
@@ -506,13 +515,7 @@ def run() -> None:
                     if shutdown.is_set():
                         render_processor.store.release(render_job_id)
                         break
-                    try:
-                        render_processor.process(render_job_id)
-                    except ForcedShutdown:
-                        render_processor.store.release(render_job_id)
-                        raise
-                    else:
-                        render_processor.store.acknowledge(render_job_id)
+                    _run_claimed_job(render_processor, render_job_id)
             except RedisError:
                 logger.exception("Redis unavailable; retrying in 2 seconds")
                 shutdown.wait(2)
@@ -520,8 +523,11 @@ def run() -> None:
         logger.warning("Worker force-stopped; active work was returned to its queue")
     finally:
         logger.info("Closing Redis connections")
-        processor.store.client.close()
-        render_processor.store.client.close()
+        for client in (processor.store.client, render_processor.store.client):
+            try:
+                client.close()
+            except Exception:
+                logger.exception("Could not close Redis connection")
         logger.info("Background worker stopped gracefully")
 
 
