@@ -10,9 +10,8 @@ import {
   SparkleIcon,
 } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -29,10 +28,19 @@ import { useRenderedClips } from "@/hooks/queries/use-render-jobs";
 import { useSubmitPerformance } from "@/hooks/mutations/use-submit-performance";
 import { apiErrorMessage } from "@/lib/api";
 import type { RenderJob } from "@/lib/types";
-import { clipByLinkSchema, performanceFeedbackSchema, type ClipByLinkValues, type PerformanceFeedbackValues } from "@/lib/validations";
+import {
+  clipByLinkSchema,
+  performanceFeedbackSchema,
+  trendingSearchSchema,
+  type ClipByLinkValues,
+  type PerformanceFeedbackValues,
+  type TrendingSearchValues,
+} from "@/lib/validations";
+import { Textarea } from "@/components/ui/textarea";
 
 const workerURL = process.env.NEXT_PUBLIC_WORKER_URL ?? "http://localhost:3002";
 const clipsPerPage = 9;
+const trendingSearchStorageKey = "clipstudio:trending-search";
 
 export default function ClipsPage() {
   const router = useRouter();
@@ -47,8 +55,31 @@ export default function ClipsPage() {
     sort,
   });
   const [linkOpen, setLinkOpen] = useState(false);
+  const [trendingOpen, setTrendingOpen] = useState(false);
   const [preview, setPreview] = useState<RenderJob | null>(null);
   const form = useForm<ClipByLinkValues>({ resolver: zodResolver(clipByLinkSchema), defaultValues: { url: "" } });
+  const trendingForm = useForm<TrendingSearchValues>({
+    resolver: zodResolver(trendingSearchSchema),
+    defaultValues: {
+      language: "en",
+      keywords: "podcast, interview, education",
+    },
+  });
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(trendingSearchStorageKey);
+      if (stored) {
+        const parsed = trendingSearchSchema.safeParse(JSON.parse(stored));
+        if (parsed.success) {
+          trendingForm.reset(parsed.data);
+        }
+      }
+    } catch {
+      // Storage can be unavailable in privacy-restricted browser contexts.
+    }
+
+  }, [trendingForm]);
   const rows = clips.data?.items ?? [];
 
   function mediaURL(path: string) {
@@ -60,12 +91,26 @@ export default function ClipsPage() {
     router.push(`/clips/trending-videos?url=${encodeURIComponent(values.url)}`);
   }
 
+  async function submitTrending(values: TrendingSearchValues) {
+    try {
+      localStorage.setItem(trendingSearchStorageKey, JSON.stringify(values));
+    } catch {
+      // Searching still works when browser storage is unavailable.
+    }
+    setTrendingOpen(false);
+    const params = new URLSearchParams({
+      language: values.language,
+      keywords: values.keywords.trim(),
+    });
+    router.push(`/clips/trending-videos?${params.toString()}`);
+  }
+
   return (
     <div className="space-y-7">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <PageHeading eyebrow="Content library" title="Your clips" description="Completed vertical clips, ready to preview and publish." />
         <div className="flex gap-2">
-          <Button asChild variant="outline"><Link href="/clips/trending-videos"><SparkleIcon />Search Trending</Link></Button>
+          <Button variant="outline" onClick={() => setTrendingOpen(true)}><SparkleIcon />Search Trending</Button>
           <Button onClick={() => setLinkOpen(true)}><LinkSimpleIcon />Clip By Link</Button>
         </div>
       </div>
@@ -109,6 +154,59 @@ export default function ClipsPage() {
           <fieldset disabled={form.formState.isSubmitting}><FormField control={form.control} name="url" render={({ field }) => <FormItem><FormLabel>Video link</FormLabel><FormControl><Input type="url" {...field} /></FormControl><FormMessage /></FormItem>} /></fieldset>
           <Button className="w-full" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? <CircleNotchIcon className="animate-spin" /> : <SparkleIcon />}Clip</Button>
         </form></Form>
+      </ResponsiveModal>
+      <ResponsiveModal
+        open={trendingOpen}
+        onOpenChange={setTrendingOpen}
+        title="Search trending videos"
+        description="Choose a language and enter comma-separated topics."
+      >
+        <Form {...trendingForm}>
+          <form className="space-y-4" onSubmit={trendingForm.handleSubmit(submitTrending)}>
+            <fieldset disabled={trendingForm.formState.isSubmitting} className="space-y-3">
+              <FormField
+                control={trendingForm.control}
+                name="language"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Language</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="en">English</SelectItem>
+                        <SelectItem value="id">Indonesian</SelectItem>
+                        <SelectItem value="es">Spanish</SelectItem>
+                        <SelectItem value="pt">Portuguese</SelectItem>
+                        <SelectItem value="fr">French</SelectItem>
+                        <SelectItem value="de">German</SelectItem>
+                        <SelectItem value="ja">Japanese</SelectItem>
+                        <SelectItem value="ko">Korean</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={trendingForm.control}
+                name="keywords"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Keywords</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="podcast, interview, education" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </fieldset>
+            <Button type="submit" className="w-full" disabled={trendingForm.formState.isSubmitting}>
+              <SparkleIcon />
+              Search Trending
+            </Button>
+          </form>
+        </Form>
       </ResponsiveModal>
       <ResponsiveModal open={Boolean(preview)} onOpenChange={(open) => !open && setPreview(null)} title="Rendered clip" className="overflow-y-auto sm:max-w-4xl">
         {preview && <div className="grid gap-6 md:grid-cols-2">

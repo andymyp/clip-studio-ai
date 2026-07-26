@@ -20,7 +20,7 @@ var (
 
 type DiscoveryProvider interface {
 	Platform() string
-	Search(context.Context, string, int) ([]model.VideoSearchResult, error)
+	Search(context.Context, string, string, int) ([]model.VideoSearchResult, error)
 	Trending(context.Context, int) ([]model.VideoSearchResult, error)
 	Resolve(context.Context, *url.URL) (*model.VideoSearchResult, error)
 	Supports(*url.URL) bool
@@ -60,12 +60,13 @@ func (service *DiscoveryService) WithCache(
 func (service *DiscoveryService) Discover(
 	ctx context.Context,
 	keyword string,
+	language string,
 	rawURL string,
 ) ([]model.VideoSearchResult, error) {
 	if len(service.providers) == 0 {
 		return nil, ErrDiscoveryUnavailable
 	}
-	cacheKey := discoveryCacheKey(keyword, rawURL)
+	cacheKey := discoveryCacheKey(keyword, language, rawURL)
 	if service.cache != nil && service.cacheTTL > 0 {
 		if cached, ok := service.cache.Get(ctx, cacheKey); ok {
 			return cached, nil
@@ -77,7 +78,7 @@ func (service *DiscoveryService) Discover(
 	if rawURL != "" {
 		results, err = service.resolve(ctx, rawURL)
 	} else {
-		results, err = service.discoverProviders(ctx, keyword)
+		results, err = service.discoverProviders(ctx, keyword, language)
 	}
 	if err != nil {
 		return nil, err
@@ -91,6 +92,7 @@ func (service *DiscoveryService) Discover(
 func (service *DiscoveryService) discoverProviders(
 	ctx context.Context,
 	keyword string,
+	language string,
 ) ([]model.VideoSearchResult, error) {
 	type response struct {
 		results []model.VideoSearchResult
@@ -107,7 +109,7 @@ func (service *DiscoveryService) discoverProviders(
 			if keyword == "" {
 				results, err = provider.Trending(ctx, service.limit)
 			} else {
-				results, err = provider.Search(ctx, keyword, service.limit)
+				results, err = provider.Search(ctx, keyword, language, service.limit)
 			}
 			responses <- response{results: results, err: err}
 		}(provider)
@@ -133,8 +135,9 @@ func (service *DiscoveryService) discoverProviders(
 	return results, nil
 }
 
-func discoveryCacheKey(keyword, rawURL string) string {
-	value := "v3\x00" + strings.ToLower(strings.TrimSpace(keyword)) + "\x00" + strings.TrimSpace(rawURL)
+func discoveryCacheKey(keyword, language, rawURL string) string {
+	value := "v4\x00" + strings.ToLower(strings.TrimSpace(keyword)) + "\x00" +
+		strings.ToLower(strings.TrimSpace(language)) + "\x00" + strings.TrimSpace(rawURL)
 	hash := sha256.Sum256([]byte(value))
 	return fmt.Sprintf("discovery:%x", hash)
 }

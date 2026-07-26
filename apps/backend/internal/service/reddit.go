@@ -55,6 +55,7 @@ func (provider *RedditProvider) Supports(link *url.URL) bool {
 func (provider *RedditProvider) Search(
 	ctx context.Context,
 	keyword string,
+	_ string,
 	limit int,
 ) ([]model.VideoSearchResult, error) {
 	query := url.Values{

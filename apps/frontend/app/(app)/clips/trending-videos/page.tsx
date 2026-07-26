@@ -33,7 +33,9 @@ export default function TrendingVideosPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sourceURL = searchParams.get("url")?.trim() || undefined;
-  const discovery = useVideoDiscovery({ url: sourceURL });
+  const keywords = searchParams.get("keywords")?.trim() || undefined;
+  const language = searchParams.get("language")?.trim() || undefined;
+  const discovery = useVideoDiscovery({ url: sourceURL, keywords, language });
   const [preview, setPreview] = useState<VideoSearchResult | null>(null);
   const createAnalysis = useCreateClipAnalysis();
 

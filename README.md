@@ -99,7 +99,6 @@ ENABLE_YOUTUBE_API=true
 YOUTUBE_API_KEY=
 YOUTUBE_REGION=
 YOUTUBE_LANGUAGE=en
-YOUTUBE_DISCOVERY_QUERY=podcast|interview|education|business|technology|science|story|debate|speech|documentary
 YOUTUBE_REUSABLE_ONLY=true
 YOUTUBE_EXCLUDE_MUSIC=true
 YOUTUBE_EXCLUDED_TERMS=religion,religious,faith,church,christian,muslim,islam,hindu,politics,political,election,war,weapon,gun,violence,violent,crime,murder,adult,sexual,gambling,casino,drug
@@ -140,7 +139,7 @@ short-form clips:
   descriptions, including religion, politics, elections, war, weapons,
   violence, crime, adult content, gambling, and drugs;
 - excludes source videos shorter than three minutes;
-- searches only the configured priority topics when no keyword is provided:
+- searches built-in priority topics when no keyword is provided:
   podcasts, expert interviews, educational explainers, tutorials, founder and
   business advice, career advice, technology, science, personal stories, life
   lessons, debates, expert opinions, public-domain speeches, and documentaries.
@@ -152,8 +151,7 @@ Adjust the window and minimum source duration with
 `YOUTUBE_REUSABLE_ONLY=false` only when you have another rights-checking
 workflow. Leave `YOUTUBE_REGION` empty for global discovery, or set an ISO
 3166-1 alpha-2 country code when regional discovery is needed. Customize the
-pipe-separated priority list with `YOUTUBE_DISCOVERY_QUERY`.
-Customize the comma-separated sensitive-topic list with
+search topics from the Search Trending form. Customize the comma-separated sensitive-topic list with
 `YOUTUBE_EXCLUDED_TERMS`. Keep the list reasonably short and use specific
 terms to avoid excluding unrelated educational content.
 

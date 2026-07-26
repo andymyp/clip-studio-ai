@@ -44,6 +44,15 @@ export const videoSearchSchema = z.object({
     .max(100, "Search must contain at most 100 characters."),
 });
 
+export const trendingSearchSchema = z.object({
+  language: z.string().min(2, "Choose a language."),
+  keywords: z
+    .string()
+    .trim()
+    .min(2, "Keywords must contain at least 2 characters.")
+    .max(100, "Keywords must contain at most 100 characters."),
+});
+
 export const clipByLinkSchema = z.object({
   url: z
     .string()
@@ -68,6 +77,7 @@ export const renderClipsSchema = z.object({
 
 export type RenderClipsValues = z.infer<typeof renderClipsSchema>;
 export type VideoSearchValues = z.infer<typeof videoSearchSchema>;
+export type TrendingSearchValues = z.infer<typeof trendingSearchSchema>;
 
 export const performanceFeedbackSchema = z.object({
   platform: z.enum(["youtube", "tiktok", "instagram"]),

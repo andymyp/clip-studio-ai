@@ -25,6 +25,7 @@ func (provider *fakeDiscoveryProvider) Supports(*url.URL) bool {
 func (provider *fakeDiscoveryProvider) Search(
 	context.Context,
 	string,
+	string,
 	int,
 ) ([]model.VideoSearchResult, error) {
 	provider.calls++
@@ -81,7 +82,7 @@ func TestDiscoveryReturnsPartialProviderResults(t *testing.T) {
 		&fakeDiscoveryProvider{platform: "reddit", err: errors.New("unavailable")},
 	)
 
-	results, err := service.Discover(context.Background(), "", "")
+	results, err := service.Discover(context.Background(), "", "", "")
 
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
@@ -97,7 +98,7 @@ func TestDiscoveryRejectsUnsupportedURL(t *testing.T) {
 		&fakeDiscoveryProvider{platform: "youtube"},
 	)
 
-	_, err := service.Discover(context.Background(), "", "https://example.com/video")
+	_, err := service.Discover(context.Background(), "", "", "https://example.com/video")
 
 	if !errors.Is(err, ErrUnsupportedVideoURL) {
 		t.Fatalf("Discover() error = %v, want ErrUnsupportedVideoURL", err)
@@ -118,7 +119,7 @@ func TestDiscoveryCachesProviderResults(t *testing.T) {
 	service := NewDiscoveryService(10, provider).WithCache(cache, time.Hour)
 
 	for range 2 {
-		results, err := service.Discover(context.Background(), "", "")
+		results, err := service.Discover(context.Background(), "", "", "")
 		if err != nil || len(results) != 1 {
 			t.Fatalf("Discover() results = %#v, error = %v", results, err)
 		}
@@ -153,19 +154,28 @@ func TestYouTubeVideoID(t *testing.T) {
 	}
 }
 
-func TestYouTubeDiscoveryQueryUsesConfiguredPriorities(t *testing.T) {
+func TestYouTubeDiscoveryQueryUsesBuiltInFallback(t *testing.T) {
 	provider := &YouTubeProvider{
 		config: YouTubeDiscoveryConfig{
-			DefaultQuery: "podcast|interview|documentary",
 			ExcludeMusic: true,
 		},
 	}
 
 	query := provider.discoveryQuery("")
 
-	want := "podcast|interview|documentary -music -song -lyrics -album"
+	want := "podcast|interview|education|business|technology|science|story|debate|speech|documentary -music -song -lyrics -album"
 	if query != want {
 		t.Fatalf("discoveryQuery() = %q, want %q", query, want)
+	}
+}
+
+func TestYouTubeDiscoveryQueryNormalizesCommaSeparatedKeywords(t *testing.T) {
+	provider := &YouTubeProvider{}
+
+	query := provider.discoveryQuery("podcast, interview, education")
+
+	if query != "podcast|interview|education" {
+		t.Fatalf("discoveryQuery() = %q", query)
 	}
 }
 

@@ -24,7 +24,6 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 			service.YouTubeDiscoveryConfig{
 				Region:          cfg.YouTubeRegion,
 				Language:        cfg.YouTubeLanguage,
-				DefaultQuery:    cfg.YouTubeDiscoveryQuery,
 				ExcludeMusic:    cfg.YouTubeExcludeMusic,
 				ExcludedTerms:   splitCSV(cfg.YouTubeExcludedTerms),
 				DiscoveryWindow: time.Duration(cfg.YouTubeDiscoveryDays) * 24 * time.Hour,

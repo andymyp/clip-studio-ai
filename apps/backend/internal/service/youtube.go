@@ -27,7 +27,6 @@ type YouTubeProvider struct {
 type YouTubeDiscoveryConfig struct {
 	Region          string
 	Language        string
-	DefaultQuery    string
 	ExcludeMusic    bool
 	ExcludedTerms   []string
 	DiscoveryWindow time.Duration
@@ -56,6 +55,7 @@ func (provider *YouTubeProvider) Supports(link *url.URL) bool {
 func (provider *YouTubeProvider) Search(
 	ctx context.Context,
 	keyword string,
+	language string,
 	limit int,
 ) ([]model.VideoSearchResult, error) {
 	query := url.Values{
@@ -74,8 +74,12 @@ func (provider *YouTubeProvider) Search(
 	if provider.config.Region != "" {
 		query.Set("regionCode", provider.config.Region)
 	}
-	if provider.config.Language != "" {
-		query.Set("relevanceLanguage", provider.config.Language)
+	relevanceLanguage := strings.TrimSpace(language)
+	if relevanceLanguage == "" {
+		relevanceLanguage = provider.config.Language
+	}
+	if relevanceLanguage != "" {
+		query.Set("relevanceLanguage", relevanceLanguage)
 	}
 	if provider.config.DiscoveryWindow > 0 {
 		query.Set(
@@ -119,7 +123,7 @@ func (provider *YouTubeProvider) Trending(
 	ctx context.Context,
 	limit int,
 ) ([]model.VideoSearchResult, error) {
-	return provider.Search(ctx, "", limit)
+	return provider.Search(ctx, "", "", limit)
 }
 
 func (provider *YouTubeProvider) Resolve(
@@ -294,17 +298,24 @@ func normalizeYouTubeVideos(items []youtubeVideo) []model.VideoSearchResult {
 }
 
 func (provider *YouTubeProvider) discoveryQuery(keyword string) string {
-	base := strings.TrimSpace(keyword)
-	if base == "" {
-		base = strings.TrimSpace(provider.config.DefaultQuery)
-	}
-	if base == "" {
-		base = "podcast|interview|education|business|technology|science|story|debate|speech|documentary"
-	}
+	base := normalizeYouTubeKeywords(keyword)
 	if provider.config.ExcludeMusic {
 		base += " -music -song -lyrics -album"
 	}
 	return base
+}
+
+func normalizeYouTubeKeywords(value string) string {
+	parts := strings.FieldsFunc(value, func(character rune) bool {
+		return character == ',' || character == '|'
+	})
+	keywords := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if keyword := strings.TrimSpace(part); keyword != "" {
+			keywords = append(keywords, keyword)
+		}
+	}
+	return strings.Join(keywords, "|")
 }
 
 func (provider *YouTubeProvider) filterDiscoveryResults(

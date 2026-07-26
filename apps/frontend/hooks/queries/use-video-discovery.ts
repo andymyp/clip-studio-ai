@@ -4,7 +4,8 @@ import { api } from "@/lib/api";
 import type { VideoSearchResult } from "@/lib/types";
 
 type DiscoveryParams = {
-  keyword?: string;
+  keywords?: string;
+  language?: string;
   url?: string;
 };
 

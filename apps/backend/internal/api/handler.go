@@ -18,8 +18,9 @@ type Handler struct {
 }
 
 type searchQuery struct {
-	Keyword string `validate:"omitempty,min=2,max=100"`
-	URL     string `validate:"omitempty,url,max=2048"`
+	Keywords string `validate:"omitempty,min=2,max=100"`
+	Language string `validate:"omitempty,alpha,min=2,max=10"`
+	URL      string `validate:"omitempty,url,max=2048"`
 }
 
 func NewHandler(
@@ -37,23 +38,27 @@ func (handler *Handler) Health(c *gin.Context) {
 
 func (handler *Handler) SearchVideos(c *gin.Context) {
 	query := searchQuery{
-		Keyword: strings.TrimSpace(c.Query("keyword")),
-		URL:     strings.TrimSpace(c.Query("url")),
+		Keywords: strings.TrimSpace(c.Query("keywords")),
+		Language: strings.TrimSpace(c.Query("language")),
+		URL:      strings.TrimSpace(c.Query("url")),
+	}
+	if query.Keywords == "" {
+		query.Keywords = strings.TrimSpace(c.Query("keyword"))
 	}
 	if err := handler.validate.Struct(query); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse{
-			Error: "keyword must contain 2 to 100 characters and url must be valid",
+			Error: "keywords must contain 2 to 100 characters, language must be valid, and url must be valid",
 		})
 		return
 	}
-	if query.Keyword != "" && query.URL != "" {
+	if query.Keywords != "" && query.URL != "" {
 		c.JSON(http.StatusBadRequest, errorResponse{
 			Error: "provide either keyword or url, not both",
 		})
 		return
 	}
 	results, err := handler.discovery.Discover(
-		c.Request.Context(), query.Keyword, query.URL,
+		c.Request.Context(), query.Keywords, query.Language, query.URL,
 	)
 	if err != nil {
 		if errors.Is(err, service.ErrUnsupportedVideoURL) {
