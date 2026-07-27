@@ -11,38 +11,31 @@ import (
 const developmentJWTSecret = "development-only-change-this-secret"
 
 type Config struct {
-	Environment          string
-	Port                 string
-	DatabaseURL          string
-	RedisAddr            string
-	AsynqQueue           string
-	AutoMigrate          bool
-	DBMaxOpen            int
-	DBMaxIdle            int
-	DBMaxLife            time.Duration
-	ShutdownTimeout      time.Duration
-	JWTSecret            string
-	JWTIssuer            string
-	AccessTokenTTL       time.Duration
-	RefreshTokenTTL      time.Duration
-	BcryptCost           int
-	EnableYouTubeAPI     bool
-	YouTubeAPIKey        string
-	YouTubeRegion        string
-	YouTubeLanguage      string
-	YouTubeExcludeMusic  bool
-	YouTubeExcludedTerms string
-	YouTubeDiscoveryDays int
-	YouTubeMinDuration   int
-	EnableRedditAPI      bool
-	RedditClientID       string
-	RedditSecret         string
-	RedditUserAgent      string
-	DiscoveryMinResults  int
-	DiscoveryLimit       int
-	DiscoveryTimeout     time.Duration
-	DiscoveryCacheTTL    time.Duration
-	WorkerAPIURL         string
+	Environment                  string
+	Port                         string
+	DatabaseURL                  string
+	RedisAddr                    string
+	AsynqQueue                   string
+	AutoMigrate                  bool
+	DBMaxOpen                    int
+	DBMaxIdle                    int
+	DBMaxLife                    time.Duration
+	ShutdownTimeout              time.Duration
+	JWTSecret                    string
+	JWTIssuer                    string
+	AccessTokenTTL               time.Duration
+	RefreshTokenTTL              time.Duration
+	BcryptCost                   int
+	EnableYouTubeAPI             bool
+	YouTubeAPIKey                string
+	YouTubeRegion                string
+	RecommendationKeywords       string
+	RecommendationInterval       time.Duration
+	RecommendationKeywordsPerRun int
+	DiscoveryLimit               int
+	DiscoveryTimeout             time.Duration
+	DiscoveryCacheTTL            time.Duration
+	WorkerAPIURL                 string
 }
 
 func LoadConfig() Config {
@@ -52,41 +45,34 @@ func LoadConfig() Config {
 	_ = godotenv.Load("../../.env.be")
 
 	return Config{
-		Environment:         env("APP_ENV", "development"),
-		Port:                env("PORT", "3001"),
-		DatabaseURL:         env("DATABASE_URL", "postgres://clipstudio:clipstudio@localhost:5432/clipstudio?sslmode=disable"),
-		RedisAddr:           env("REDIS_ADDR", "localhost:6379"),
-		AsynqQueue:          env("ASYNQ_QUEUE", "default"),
-		AutoMigrate:         envBool("AUTO_MIGRATE", true),
-		DBMaxOpen:           envInt("DB_MAX_OPEN_CONNS", 25),
-		DBMaxIdle:           envInt("DB_MAX_IDLE_CONNS", 10),
-		DBMaxLife:           envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
-		ShutdownTimeout:     envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
-		JWTSecret:           env("JWT_SECRET", developmentJWTSecret),
-		JWTIssuer:           env("JWT_ISSUER", "clipstudio-ai"),
-		AccessTokenTTL:      envDuration("JWT_ACCESS_TTL", 15*time.Minute),
-		RefreshTokenTTL:     envDuration("JWT_REFRESH_TTL", 7*24*time.Hour),
-		BcryptCost:          envInt("BCRYPT_COST", 12),
-		EnableYouTubeAPI:    envBool("ENABLE_YOUTUBE_API", true),
-		YouTubeAPIKey:       env("YOUTUBE_API_KEY", ""),
-		YouTubeRegion:       env("YOUTUBE_REGION", ""),
-		YouTubeLanguage:     env("YOUTUBE_LANGUAGE", "en"),
-		YouTubeExcludeMusic: envBool("YOUTUBE_EXCLUDE_MUSIC", true),
-		YouTubeExcludedTerms: env(
-			"YOUTUBE_EXCLUDED_TERMS",
-			"religion,religious,faith,church,christian,muslim,islam,hindu,politics,political,election,war,weapon,gun,violence,violent,crime,murder,adult,sexual,gambling,casino,drug",
+		Environment:      env("APP_ENV", "development"),
+		Port:             env("PORT", "3001"),
+		DatabaseURL:      env("DATABASE_URL", "postgres://clipstudio:clipstudio@localhost:5432/clipstudio?sslmode=disable"),
+		RedisAddr:        env("REDIS_ADDR", "localhost:6379"),
+		AsynqQueue:       env("ASYNQ_QUEUE", "default"),
+		AutoMigrate:      envBool("AUTO_MIGRATE", true),
+		DBMaxOpen:        envInt("DB_MAX_OPEN_CONNS", 25),
+		DBMaxIdle:        envInt("DB_MAX_IDLE_CONNS", 10),
+		DBMaxLife:        envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
+		ShutdownTimeout:  envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
+		JWTSecret:        env("JWT_SECRET", developmentJWTSecret),
+		JWTIssuer:        env("JWT_ISSUER", "clipstudio-ai"),
+		AccessTokenTTL:   envDuration("JWT_ACCESS_TTL", 15*time.Minute),
+		RefreshTokenTTL:  envDuration("JWT_REFRESH_TTL", 7*24*time.Hour),
+		BcryptCost:       envInt("BCRYPT_COST", 12),
+		EnableYouTubeAPI: envBool("ENABLE_YOUTUBE_API", true),
+		YouTubeAPIKey:    env("YOUTUBE_API_KEY", ""),
+		YouTubeRegion:    env("YOUTUBE_REGION", ""),
+		RecommendationKeywords: env(
+			"YOUTUBE_RECOMMENDATION_KEYWORDS",
+			"podcast,interview,debate,speech,documentary,education,science,technology,history,business,startup,finance,psychology,motivation,health,story",
 		),
-		YouTubeDiscoveryDays: envInt("YOUTUBE_DISCOVERY_DAYS", 30),
-		YouTubeMinDuration:   envInt("YOUTUBE_MIN_DURATION_SECONDS", 180),
-		EnableRedditAPI:      envBool("ENABLE_REDDIT_API", false),
-		RedditClientID:       env("REDDIT_CLIENT_ID", ""),
-		RedditSecret:         env("REDDIT_CLIENT_SECRET", ""),
-		RedditUserAgent:      env("REDDIT_USER_AGENT", "web:clipstudio-ai:v0.1.0"),
-		DiscoveryMinResults:  envInt("DISCOVERY_MIN_RESULTS", 10),
-		DiscoveryLimit:       envInt("DISCOVERY_LIMIT", 20),
-		DiscoveryTimeout:     envDuration("DISCOVERY_TIMEOUT", 12*time.Second),
-		DiscoveryCacheTTL:    envDuration("DISCOVERY_CACHE_TTL", 6*time.Hour),
-		WorkerAPIURL:         env("WORKER_API_URL", "http://localhost:3002"),
+		RecommendationInterval:       envDuration("RECOMMENDATION_SYNC_INTERVAL", 30*time.Minute),
+		RecommendationKeywordsPerRun: envInt("RECOMMENDATION_KEYWORDS_PER_RUN", 2),
+		DiscoveryLimit:               envInt("DISCOVERY_LIMIT", 20),
+		DiscoveryTimeout:             envDuration("DISCOVERY_TIMEOUT", 12*time.Second),
+		DiscoveryCacheTTL:            envDuration("DISCOVERY_CACHE_TTL", 6*time.Hour),
+		WorkerAPIURL:                 env("WORKER_API_URL", "http://localhost:3002"),
 	}
 }
 

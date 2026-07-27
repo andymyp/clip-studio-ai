@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/model"
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -12,9 +13,10 @@ import (
 )
 
 type Handler struct {
-	discovery *service.DiscoveryService
-	validate  *validator.Validate
-	logger    *zap.Logger
+	discovery       *service.DiscoveryService
+	recommendations *service.RecommendationService
+	validate        *validator.Validate
+	logger          *zap.Logger
 }
 
 type searchQuery struct {
@@ -26,10 +28,15 @@ type searchQuery struct {
 func NewHandler(
 	discovery *service.DiscoveryService,
 	logger *zap.Logger,
+	recommendations ...*service.RecommendationService,
 ) *Handler {
-	return &Handler{
+	handler := &Handler{
 		discovery: discovery, validate: validator.New(), logger: logger,
 	}
+	if len(recommendations) > 0 {
+		handler.recommendations = recommendations[0]
+	}
+	return handler
 }
 
 func (handler *Handler) Health(c *gin.Context) {
@@ -57,12 +64,25 @@ func (handler *Handler) SearchVideos(c *gin.Context) {
 		})
 		return
 	}
-	results, err := handler.discovery.Discover(
-		c.Request.Context(), query.Keywords, query.Language, query.URL,
-	)
+	var results []model.VideoSearchResult
+	var err error
+	if query.URL == "" && handler.recommendations != nil {
+		category := strings.Split(query.Keywords, ",")[0]
+		results, err = handler.recommendations.Search(
+			c.Request.Context(), query.Language, category,
+		)
+	} else {
+		results, err = handler.discovery.Resolve(c.Request.Context(), query.URL)
+	}
 	if err != nil {
 		if errors.Is(err, service.ErrUnsupportedVideoURL) {
 			c.JSON(http.StatusBadRequest, errorResponse{Error: "unsupported video URL"})
+			return
+		}
+		if errors.Is(err, service.ErrNonReusableVideo) {
+			c.JSON(http.StatusBadRequest, errorResponse{
+				Error: "only Creative Commons YouTube videos are supported",
+			})
 			return
 		}
 		if errors.Is(err, service.ErrDiscoveryUnavailable) {
@@ -71,8 +91,29 @@ func (handler *Handler) SearchVideos(c *gin.Context) {
 			})
 			return
 		}
+		if errors.Is(err, service.ErrDiscoveryRateLimited) {
+			c.JSON(http.StatusTooManyRequests, errorResponse{
+				Error: "YouTube is temporarily rate limited; try again shortly",
+			})
+			return
+		}
 		writeError(c, handler.logger, err)
 		return
 	}
 	c.JSON(http.StatusOK, results)
+}
+
+func (handler *Handler) RecommendationStatus(c *gin.Context) {
+	if handler.recommendations == nil {
+		c.JSON(http.StatusServiceUnavailable, errorResponse{
+			Error: "recommendation scheduler is not configured",
+		})
+		return
+	}
+	status, err := handler.recommendations.Status(c.Request.Context())
+	if err != nil {
+		writeError(c, handler.logger, err)
+		return
+	}
+	c.JSON(http.StatusOK, status)
 }

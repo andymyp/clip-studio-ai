@@ -11,12 +11,13 @@ import {
 } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { PageHeading } from "@/components/page-heading";
 import { DataPagination } from "@/components/data-pagination";
+import { RecommendationSearchModal } from "@/components/recommendation-search-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,21 +27,18 @@ import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRenderedClips } from "@/hooks/queries/use-render-jobs";
 import { useSubmitPerformance } from "@/hooks/mutations/use-submit-performance";
-import { apiErrorMessage } from "@/lib/api";
-import type { RenderJob } from "@/lib/types";
+import { api, apiErrorMessage } from "@/lib/api";
+import type { RecommendationSchedulerStatus, RenderJob } from "@/lib/types";
 import {
   clipByLinkSchema,
   performanceFeedbackSchema,
-  trendingSearchSchema,
   type ClipByLinkValues,
   type PerformanceFeedbackValues,
   type TrendingSearchValues,
 } from "@/lib/validations";
-import { Textarea } from "@/components/ui/textarea";
 
 const workerURL = process.env.NEXT_PUBLIC_WORKER_URL ?? "http://localhost:3002";
 const clipsPerPage = 9;
-const trendingSearchStorageKey = "clipstudio:trending-search";
 
 export default function ClipsPage() {
   const router = useRouter();
@@ -56,30 +54,9 @@ export default function ClipsPage() {
   });
   const [linkOpen, setLinkOpen] = useState(false);
   const [trendingOpen, setTrendingOpen] = useState(false);
+  const [checkingRecommendations, setCheckingRecommendations] = useState(false);
   const [preview, setPreview] = useState<RenderJob | null>(null);
   const form = useForm<ClipByLinkValues>({ resolver: zodResolver(clipByLinkSchema), defaultValues: { url: "" } });
-  const trendingForm = useForm<TrendingSearchValues>({
-    resolver: zodResolver(trendingSearchSchema),
-    defaultValues: {
-      language: "en",
-      keywords: "podcast, interview, education",
-    },
-  });
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(trendingSearchStorageKey);
-      if (stored) {
-        const parsed = trendingSearchSchema.safeParse(JSON.parse(stored));
-        if (parsed.success) {
-          trendingForm.reset(parsed.data);
-        }
-      }
-    } catch {
-      // Storage can be unavailable in privacy-restricted browser contexts.
-    }
-
-  }, [trendingForm]);
   const rows = clips.data?.items ?? [];
 
   function mediaURL(path: string) {
@@ -88,21 +65,47 @@ export default function ClipsPage() {
 
   async function submitLink(values: ClipByLinkValues) {
     setLinkOpen(false);
-    router.push(`/clips/trending-videos?url=${encodeURIComponent(values.url)}`);
+    router.push(`/clips/recommendations?url=${encodeURIComponent(values.url)}`);
   }
 
   async function submitTrending(values: TrendingSearchValues) {
-    try {
-      localStorage.setItem(trendingSearchStorageKey, JSON.stringify(values));
-    } catch {
-      // Searching still works when browser storage is unavailable.
-    }
-    setTrendingOpen(false);
     const params = new URLSearchParams({
       language: values.language,
       keywords: values.keywords.trim(),
     });
-    router.push(`/clips/trending-videos?${params.toString()}`);
+    router.push(`/clips/recommendations?${params.toString()}`);
+  }
+
+  async function openRecommendationSearch() {
+    setCheckingRecommendations(true);
+    try {
+      const { data: status } = await api.get<RecommendationSchedulerStatus>(
+        "/videos/recommendations/status",
+      );
+      if (status.catalog_ready) {
+        setTrendingOpen(true);
+        return;
+      }
+      if (status.state === "running") {
+        toast.info("Recommendations are being prepared", {
+          description: "YouTube data is being collected and ranked. Please try again shortly.",
+        });
+        return;
+      }
+      if (status.state === "failed") {
+        toast.error("Recommendations are not ready", {
+          description: status.error || "The latest catalog refresh failed. Please try again later.",
+        });
+        return;
+      }
+      toast.info("Recommendation catalog is not ready", {
+        description: "The initial catalog refresh has not completed yet.",
+      });
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    } finally {
+      setCheckingRecommendations(false);
+    }
   }
 
   return (
@@ -110,7 +113,14 @@ export default function ClipsPage() {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <PageHeading eyebrow="Content library" title="Your clips" description="Completed vertical clips, ready to preview and publish." />
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setTrendingOpen(true)}><SparkleIcon />Search Trending</Button>
+          <Button
+            variant="outline"
+            disabled={checkingRecommendations}
+            onClick={openRecommendationSearch}
+          >
+            {checkingRecommendations ? <CircleNotchIcon className="animate-spin" /> : <SparkleIcon />}
+            {checkingRecommendations ? "Checking..." : "Search Recommendation"}
+          </Button>
           <Button onClick={() => setLinkOpen(true)}><LinkSimpleIcon />Clip By Link</Button>
         </div>
       </div>
@@ -155,59 +165,11 @@ export default function ClipsPage() {
           <Button className="w-full" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? <CircleNotchIcon className="animate-spin" /> : <SparkleIcon />}Clip</Button>
         </form></Form>
       </ResponsiveModal>
-      <ResponsiveModal
+      <RecommendationSearchModal
         open={trendingOpen}
         onOpenChange={setTrendingOpen}
-        title="Search trending videos"
-        description="Choose a language and enter comma-separated topics."
-      >
-        <Form {...trendingForm}>
-          <form className="space-y-4" onSubmit={trendingForm.handleSubmit(submitTrending)}>
-            <fieldset disabled={trendingForm.formState.isSubmitting} className="space-y-3">
-              <FormField
-                control={trendingForm.control}
-                name="language"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Language</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="id">Indonesian</SelectItem>
-                        <SelectItem value="es">Spanish</SelectItem>
-                        <SelectItem value="pt">Portuguese</SelectItem>
-                        <SelectItem value="fr">French</SelectItem>
-                        <SelectItem value="de">German</SelectItem>
-                        <SelectItem value="ja">Japanese</SelectItem>
-                        <SelectItem value="ko">Korean</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={trendingForm.control}
-                name="keywords"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Keywords</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="podcast, interview, education" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </fieldset>
-            <Button type="submit" className="w-full" disabled={trendingForm.formState.isSubmitting}>
-              <SparkleIcon />
-              Search Trending
-            </Button>
-          </form>
-        </Form>
-      </ResponsiveModal>
+        onSearch={submitTrending}
+      />
       <ResponsiveModal open={Boolean(preview)} onOpenChange={(open) => !open && setPreview(null)} title="Rendered clip" className="overflow-y-auto sm:max-w-4xl">
         {preview && <div className="grid gap-6 md:grid-cols-2">
           <video controls autoPlay src={mediaURL(preview.media_url)} className="mx-auto max-h-[70dvh] rounded-2xl bg-black" />

@@ -11,121 +11,45 @@ import (
 )
 
 type fakeDiscoveryProvider struct {
-	platform string
-	results  []model.VideoSearchResult
-	err      error
+	result   model.VideoSearchResult
 	supports bool
-	calls    int
 }
 
-func (provider *fakeDiscoveryProvider) Platform() string { return provider.platform }
+func (provider *fakeDiscoveryProvider) Platform() string { return "youtube" }
 func (provider *fakeDiscoveryProvider) Supports(*url.URL) bool {
 	return provider.supports
-}
-func (provider *fakeDiscoveryProvider) Search(
-	context.Context,
-	string,
-	string,
-	int,
-) ([]model.VideoSearchResult, error) {
-	provider.calls++
-	return provider.results, provider.err
-}
-func (provider *fakeDiscoveryProvider) Trending(
-	context.Context,
-	int,
-) ([]model.VideoSearchResult, error) {
-	provider.calls++
-	return provider.results, provider.err
-}
-
-type memoryDiscoveryCache struct {
-	values map[string][]model.VideoSearchResult
-}
-
-func (cache *memoryDiscoveryCache) Get(
-	_ context.Context,
-	key string,
-) ([]model.VideoSearchResult, bool) {
-	results, ok := cache.values[key]
-	return results, ok
-}
-
-func (cache *memoryDiscoveryCache) Set(
-	_ context.Context,
-	key string,
-	results []model.VideoSearchResult,
-	_ time.Duration,
-) {
-	cache.values[key] = results
 }
 func (provider *fakeDiscoveryProvider) Resolve(
 	context.Context,
 	*url.URL,
 ) (*model.VideoSearchResult, error) {
-	if provider.err != nil {
-		return nil, provider.err
-	}
-	return &provider.results[0], nil
+	return &provider.result, nil
 }
 
-func TestDiscoveryReturnsPartialProviderResults(t *testing.T) {
-	service := NewDiscoveryService(
-		10,
-		&fakeDiscoveryProvider{
-			platform: "youtube",
-			results: []model.VideoSearchResult{{
-				ExternalID: "video-id",
-				Platform:   "youtube",
-			}},
+func TestDiscoveryResolvesSupportedURL(t *testing.T) {
+	service := NewDiscoveryService(&fakeDiscoveryProvider{
+		supports: true,
+		result: model.VideoSearchResult{
+			ExternalID: "video-id",
+			Platform:   "youtube",
 		},
-		&fakeDiscoveryProvider{platform: "reddit", err: errors.New("unavailable")},
+	})
+
+	results, err := service.Resolve(
+		context.Background(),
+		"https://youtube.com/watch?v=video-id",
 	)
-
-	results, err := service.Discover(context.Background(), "", "", "")
-
-	if err != nil {
-		t.Fatalf("Discover() error = %v", err)
-	}
-	if len(results) != 1 || results[0].ExternalID != "video-id" {
-		t.Fatalf("Discover() results = %#v", results)
+	if err != nil || len(results) != 1 || results[0].ExternalID != "video-id" {
+		t.Fatalf("Resolve() results = %#v, error = %v", results, err)
 	}
 }
 
 func TestDiscoveryRejectsUnsupportedURL(t *testing.T) {
-	service := NewDiscoveryService(
-		10,
-		&fakeDiscoveryProvider{platform: "youtube"},
-	)
+	service := NewDiscoveryService(&fakeDiscoveryProvider{})
 
-	_, err := service.Discover(context.Background(), "", "", "https://example.com/video")
-
+	_, err := service.Resolve(context.Background(), "https://example.com/video")
 	if !errors.Is(err, ErrUnsupportedVideoURL) {
-		t.Fatalf("Discover() error = %v, want ErrUnsupportedVideoURL", err)
-	}
-}
-
-func TestDiscoveryCachesProviderResults(t *testing.T) {
-	provider := &fakeDiscoveryProvider{
-		platform: "youtube",
-		results: []model.VideoSearchResult{{
-			ExternalID: "cached-video",
-			Platform:   "youtube",
-		}},
-	}
-	cache := &memoryDiscoveryCache{
-		values: make(map[string][]model.VideoSearchResult),
-	}
-	service := NewDiscoveryService(10, provider).WithCache(cache, time.Hour)
-
-	for range 2 {
-		results, err := service.Discover(context.Background(), "", "", "")
-		if err != nil || len(results) != 1 {
-			t.Fatalf("Discover() results = %#v, error = %v", results, err)
-		}
-	}
-	if provider.calls != 1 {
-		t.Fatalf("provider calls = %d, want 1", provider.calls)
+		t.Fatalf("Resolve() error = %v, want ErrUnsupportedVideoURL", err)
 	}
 }
 
@@ -154,43 +78,47 @@ func TestYouTubeVideoID(t *testing.T) {
 	}
 }
 
-func TestYouTubeDiscoveryQueryUsesBuiltInFallback(t *testing.T) {
-	provider := &YouTubeProvider{
-		config: YouTubeDiscoveryConfig{
-			ExcludeMusic: true,
-		},
-	}
-
-	query := provider.discoveryQuery("")
-
-	want := "podcast|interview|education|business|technology|science|story|debate|speech|documentary -music -song -lyrics -album"
-	if query != want {
-		t.Fatalf("discoveryQuery() = %q, want %q", query, want)
-	}
-}
-
-func TestYouTubeDiscoveryQueryNormalizesCommaSeparatedKeywords(t *testing.T) {
-	provider := &YouTubeProvider{}
-
-	query := provider.discoveryQuery("podcast, interview, education")
-
-	if query != "podcast|interview|education" {
-		t.Fatalf("discoveryQuery() = %q", query)
-	}
-}
-
-func TestContainsExcludedTermMatchesWholeWords(t *testing.T) {
-	terms := []string{"religion", "war", "adult content"}
-	for _, value := range []string{
-		"A discussion about religion and society",
-		"Lessons from the war",
-		"An adult-content policy overview",
+func TestYouTubePageSizeUsesDiscoveryLimit(t *testing.T) {
+	for _, test := range []struct {
+		limit int
+		want  int
+	}{
+		{limit: -1, want: 1},
+		{limit: 20, want: 20},
+		{limit: 100, want: 50},
 	} {
-		if !containsExcludedTerm(value, terms) {
-			t.Fatalf("containsExcludedTerm(%q) = false", value)
+		if got := youtubePageSize(test.limit); got != test.want {
+			t.Fatalf("youtubePageSize(%d) = %d, want %d", test.limit, got, test.want)
 		}
 	}
-	if containsExcludedTerm("A software award ceremony", terms) {
-		t.Fatal("containsExcludedTerm() matched a partial word")
+}
+
+func TestYouTubeRetryDelayUsesHeaderAndCapsDelay(t *testing.T) {
+	if got := youtubeRetryDelay("2", 0); got != 2*time.Second {
+		t.Fatalf("youtubeRetryDelay() = %v, want 2s", got)
+	}
+	if got := youtubeRetryDelay("60", 0); got != 5*time.Second {
+		t.Fatalf("youtubeRetryDelay() = %v, want 5s", got)
+	}
+	if got := youtubeRetryDelay("", 1); got != 2*time.Second {
+		t.Fatalf("youtubeRetryDelay() fallback = %v, want 2s", got)
+	}
+}
+
+func TestYouTubeRequestDelayStopsWhenCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := waitForYouTubeRequest(ctx, time.Minute); !errors.Is(err, context.Canceled) {
+		t.Fatalf("waitForYouTubeRequest() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestCreativeCommonsOnlyRejectsStandardLicense(t *testing.T) {
+	results := creativeCommonsOnly([]model.VideoSearchResult{
+		{ExternalID: "cc", License: "creativeCommon", Reusable: true},
+		{ExternalID: "standard", License: "youtube", Reusable: false},
+	})
+	if len(results) != 1 || results[0].ExternalID != "cc" {
+		t.Fatalf("creativeCommonsOnly() = %#v", results)
 	}
 }

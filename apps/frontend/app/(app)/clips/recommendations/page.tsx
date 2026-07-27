@@ -10,6 +10,7 @@ import {
   HeartIcon,
   CircleNotchIcon,
   PlayIcon,
+  SlidersHorizontalIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
 import Image from "next/image";
@@ -18,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { PageHeading } from "@/components/page-heading";
+import { RecommendationSearchModal } from "@/components/recommendation-search-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,10 +28,11 @@ import { useCreateClipAnalysis } from "@/hooks/mutations/use-create-clip-analysi
 import { useVideoDiscovery } from "@/hooks/queries/use-video-discovery";
 import { apiErrorMessage } from "@/lib/api";
 import type { VideoSearchResult } from "@/lib/types";
+import type { TrendingSearchValues } from "@/lib/validations";
 
 const metricFormatter = new Intl.NumberFormat("en", { notation: "compact" });
 
-export default function TrendingVideosPage() {
+export default function RecommendationsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sourceURL = searchParams.get("url")?.trim() || undefined;
@@ -37,6 +40,7 @@ export default function TrendingVideosPage() {
   const language = searchParams.get("language")?.trim() || undefined;
   const discovery = useVideoDiscovery({ url: sourceURL, keywords, language });
   const [preview, setPreview] = useState<VideoSearchResult | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const createAnalysis = useCreateClipAnalysis();
 
   function clipVideo(video: VideoSearchResult) {
@@ -48,6 +52,11 @@ export default function TrendingVideosPage() {
     });
   }
 
+  function refineSearch(values: TrendingSearchValues) {
+    const params = new URLSearchParams(values);
+    router.push(`/clips/recommendations?${params.toString()}`);
+  }
+
   return (
     <div className="space-y-7">
       <div>
@@ -57,15 +66,25 @@ export default function TrendingVideosPage() {
             Back to clips
           </Link>
         </Button>
-        <PageHeading
-          eyebrow={sourceURL ? "Video found" : "Discovery"}
-          title={sourceURL ? "Ready to clip" : "Trending videos"}
-          description={
-            sourceURL
-              ? "Preview the video before sending it to the clipping workflow."
-              : "Viral and trending videos discovered across YouTube and Reddit."
-          }
-        />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <PageHeading
+            eyebrow={sourceURL ? "Video found" : "Discovery"}
+            title={sourceURL ? "Ready to clip" : "Recommended videos"}
+            description={
+              sourceURL
+                ? "Preview the video before sending it to the clipping workflow."
+                : keywords
+                  ? `Results for ${keywords}`
+                  : "Fresh long-form YouTube videos ranked by viral potential."
+            }
+          />
+          {!sourceURL && (
+            <Button variant="outline" onClick={() => setSearchOpen(true)}>
+              <SlidersHorizontalIcon />
+              Refine search
+            </Button>
+          )}
+        </div>
       </div>
 
       {discovery.isLoading ? (
@@ -117,6 +136,12 @@ export default function TrendingVideosPage() {
           />
         )}
       </ResponsiveModal>
+      <RecommendationSearchModal
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onSearch={refineSearch}
+        values={{ language, keywords }}
+      />
     </div>
   );
 }

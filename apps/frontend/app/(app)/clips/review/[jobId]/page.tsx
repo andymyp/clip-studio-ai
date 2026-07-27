@@ -98,7 +98,7 @@ export default function ReviewClipsPage() {
     <div className="space-y-7">
       <div>
         <Button asChild variant="ghost" className="-ml-2 mb-4">
-          <Link href="/clips/trending-videos">
+          <Link href="/clips/recommendations">
             <ArrowLeftIcon />
             Back to discovery
           </Link>
@@ -302,7 +302,7 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
       <h1 className="mt-4 font-heading text-xl font-semibold">{title}</h1>
       <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">{detail}</p>
       <Button asChild variant="outline" className="mt-5">
-        <Link href="/clips/trending-videos">Return to discovery</Link>
+        <Link href="/clips/recommendations">Return to recommendations</Link>
       </Button>
     </div>
   );

@@ -3,10 +3,8 @@ package api
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/middleware"
-	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/repository"
 	"github.com/clipstudio-ai/clipstudio-ai/backend/internal/service"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -16,40 +14,35 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	discoveryHTTPClient := &http.Client{Timeout: cfg.DiscoveryTimeout}
-	var youtubeProvider service.DiscoveryProvider
+	var youtubeProvider *service.YouTubeProvider
 	if cfg.EnableYouTubeAPI {
 		youtubeProvider = service.NewYouTubeProvider(
 			cfg.YouTubeAPIKey,
 			discoveryHTTPClient,
 			service.YouTubeDiscoveryConfig{
-				Region:          cfg.YouTubeRegion,
-				Language:        cfg.YouTubeLanguage,
-				ExcludeMusic:    cfg.YouTubeExcludeMusic,
-				ExcludedTerms:   splitCSV(cfg.YouTubeExcludedTerms),
-				DiscoveryWindow: time.Duration(cfg.YouTubeDiscoveryDays) * 24 * time.Hour,
-				MinimumDuration: time.Duration(cfg.YouTubeMinDuration) * time.Second,
-				MinimumResults:  cfg.DiscoveryMinResults,
+				Region: cfg.YouTubeRegion,
 			},
 		)
 	}
-	var redditProvider service.DiscoveryProvider
-	if cfg.EnableRedditAPI {
-		redditProvider = service.NewRedditProvider(
-			cfg.RedditClientID,
-			cfg.RedditSecret,
-			cfg.RedditUserAgent,
-			discoveryHTTPClient,
-		)
-	}
 	discoveryService := service.NewDiscoveryService(
-		cfg.DiscoveryLimit,
 		youtubeProvider,
-		redditProvider,
-	).WithCache(
-		repository.NewRedisDiscoveryCache(deps.Redis),
-		cfg.DiscoveryCacheTTL,
 	)
-	handler := NewHandler(discoveryService, deps.Logger)
+	recommendationService := service.NewRecommendationService(
+		deps.DB, deps.Redis, cfg.DiscoveryCacheTTL, cfg.DiscoveryLimit,
+	)
+	handler := NewHandler(discoveryService, deps.Logger, recommendationService)
+	if youtubeProvider != nil {
+		deps.Recommendations = service.NewRecommendationScheduler(
+			youtubeProvider,
+			recommendationService,
+			splitCSV(cfg.RecommendationKeywords),
+			cfg.RecommendationInterval,
+			50,
+			cfg.RecommendationKeywordsPerRun,
+			deps.Logger,
+		)
+		deps.Recommendations.Start()
+	}
 	workerClient := service.NewWorkerClient(cfg.WorkerAPIURL, discoveryHTTPClient)
 	workerHandler := NewWorkerHandler(workerClient, deps.Logger)
 	renderHandler := NewRenderHandler(deps.DB, deps.Redis, workerClient, deps.Logger)
@@ -83,6 +76,8 @@ func NewRouter(cfg Config, deps *Dependencies) *gin.Engine {
 	videos := router.Group("/videos")
 	videos.Use(middleware.Authenticate(deps.Auth))
 	videos.GET("/search", handler.SearchVideos)
+	videos.GET("/recommendations", handler.SearchVideos)
+	videos.GET("/recommendations/status", handler.RecommendationStatus)
 
 	clips := router.Group("/clips")
 	clips.Use(middleware.Authenticate(deps.Auth))

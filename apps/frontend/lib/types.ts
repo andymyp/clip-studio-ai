@@ -34,6 +34,19 @@ export type VideoSearchResult = {
   reusable: boolean;
 };
 
+export type RecommendationSchedulerStatus = {
+  state: "waiting" | "running" | "completed" | "failed";
+  catalog_ready: boolean;
+  started_at?: string;
+  completed_at?: string;
+  last_success_at?: string;
+  keywords_requested?: string[];
+  keywords_succeeded?: string[];
+  keyword_errors?: Record<string, string>;
+  videos_collected: number;
+  error?: string;
+};
+
 export type GeneratedClip = {
   id: string;
   start: number;
