@@ -16,11 +16,13 @@ def test_render_builds_vertical_ffmpeg_pipeline(tmp_path: Path) -> None:
     def run(command: list[str], **_kwargs: object) -> object:
         output.touch()
         graph = command[command.index("-filter_complex") + 1]
-        assert graph.count("scale=-2:'1920*(") == 2
-        assert graph.count("eval=frame") == 2
-        assert "1.0000+(1.0400-1.0000)" in graph
+        assert graph.count("scale=-2:1920*1.0000") == 2
+        assert "eval=frame" not in graph
+        assert "iw*0.2500-540" in graph
+        assert "iw*0.7500-540" in graph
+        assert graph.count(":y=0,") == 2
+        assert "t/7.000" not in graph
         assert "fade=t=in:st=0:d=0.18" in graph
-        assert "t/7.000" in graph
         assert "crop=1080:1920" in graph
         assert graph.count("setsar=1") == 2
         assert graph.count("fps=30000/1001") == 2

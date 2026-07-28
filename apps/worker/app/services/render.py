@@ -40,27 +40,13 @@ class RenderService:
         intervals = intervals or [EditInterval(start=0, end=86_400)]
         centers = face_centers or [0.5] * len(intervals)
         layouts = layouts or ["crop"] * len(intervals)
-        zooms = zooms or [1.04] * len(intervals)
+        zooms = zooms or [1.0] * len(intervals)
         graph: list[str] = []
         concat_inputs: list[str] = []
         for index, interval in enumerate(intervals):
             center = centers[index] if index < len(centers) else 0.5
-            previous = centers[index - 1] if index > 0 and index - 1 < len(centers) else center
-            duration = max(0.001, (interval.end - interval.start) / playback_speed)
-            phase = f"min(1,max(0,t/{duration:.3f}))"
-            easing = f"({phase})*({phase})*(3-2*({phase}))"
-            pan = (
-                f"{previous:.4f}+({center:.4f}-{previous:.4f})"
-                f"*({easing})"
-            )
-            target_zoom = zooms[index] if index < len(zooms) else 1.04
-            previous_zoom = (
-                zooms[index - 1]
-                if index > 0 and index - 1 < len(zooms)
-                else 1.0
-            )
-            zoom = f"{previous_zoom:.4f}+({target_zoom:.4f}-{previous_zoom:.4f})*({easing})"
-            scale_height = f"1920*({zoom})"
+            target_zoom = zooms[index] if index < len(zooms) else 1.0
+            scale_height = f"1920*{target_zoom:.4f}"
             opening_fade = ",fade=t=in:st=0:d=0.18" if index == 0 else ""
             if index < len(layouts) and layouts[index] == "fit":
                 graph.extend(
@@ -90,9 +76,9 @@ class RenderService:
                 graph.append(
                     f"[0:v]trim=start={interval.start:.3f}:end={interval.end:.3f},"
                     f"setpts=(PTS-STARTPTS)/{playback_speed:.3f},"
-                    f"scale=-2:'{scale_height}':flags=lanczos:eval=frame,"
-                    f"crop=1080:1920:x='max(0,min(iw-1080,(iw-1080)*({pan})))':"
-                    f"y=(ih-1920)/2,setsar=1,fps=30000/1001,format=yuv420p"
+                    f"scale=-2:{scale_height}:flags=lanczos,"
+                    f"crop=1080:1920:x='max(0,min(iw-1080,iw*{center:.4f}-540))':"
+                    "y=0,setsar=1,fps=30000/1001,format=yuv420p"
                     f"{opening_fade}"
                     f"[v{index}]"
                 )
