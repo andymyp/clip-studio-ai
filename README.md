@@ -1,8 +1,8 @@
 # ClipStudio AI
 
-ClipStudio AI is a monorepo for discovering trending videos and turning their
+ClipStudio AI is a monorepo for recommending high-potential videos and turning their
 best moments into short-form clips. It provides a modern creator dashboard,
-YouTube and Reddit discovery, authenticated backend APIs, queue foundations,
+scheduled YouTube recommendation ingestion, authenticated backend APIs, queue foundations,
 worker tooling, and local or containerized development workflows.
 
 ## Technology
@@ -88,92 +88,53 @@ Copy-Item .env.worker.example .env.worker
 These commands overwrite existing destination files only when `-Force` is
 added. Review and customize the generated files before starting the services.
 
-### Video discovery credentials
+### Video recommendation credentials
 
-Video discovery requires an enabled provider with valid credentials. Add them
-to `.env.be`. The default configuration enables YouTube and disables Reddit:
+The recommendation scheduler requires an enabled YouTube provider:
 
 ```dotenv
 # YouTube Data API v3
 ENABLE_YOUTUBE_API=true
 YOUTUBE_API_KEY=
 YOUTUBE_REGION=
-YOUTUBE_LANGUAGE=en
-YOUTUBE_DISCOVERY_QUERY=podcast|interview|education|business|technology|science|story|debate|speech|documentary
-YOUTUBE_REUSABLE_ONLY=true
-YOUTUBE_EXCLUDE_MUSIC=true
-YOUTUBE_EXCLUDED_TERMS=religion,religious,faith,church,christian,muslim,islam,hindu,politics,political,election,war,weapon,gun,violence,violent,crime,murder,adult,sexual,gambling,casino,drug
-YOUTUBE_DISCOVERY_DAYS=30
-YOUTUBE_MIN_DURATION_SECONDS=180
-
-# Reddit application-only OAuth
-ENABLE_REDDIT_API=false
-REDDIT_CLIENT_ID=
-REDDIT_CLIENT_SECRET=
-REDDIT_USER_AGENT=web:clipstudio-ai:v0.1.0
-
-DISCOVERY_MIN_RESULTS=10
+YOUTUBE_RECOMMENDATION_KEYWORDS=podcast,interview,debate,speech,documentary,education,science,technology,history,business,startup,finance,psychology,motivation,health,story
+RECOMMENDATION_SYNC_INTERVAL=30m
+RECOMMENDATION_KEYWORDS_PER_RUN=2
 DISCOVERY_LIMIT=20
 DISCOVERY_TIMEOUT=12s
 DISCOVERY_CACHE_TTL=6h
 ```
 
 Create the YouTube key in a Google Cloud project with YouTube Data API v3
-enabled. Create a Reddit script application for the client ID and secret, and
-use an identifiable user-agent for Reddit requests.
+enabled. Every 30 minutes one backend instance acquires a Redis lock and
+refreshes the recommendation catalog. It combines
+`videos.list(chart=mostPopular)` with a rotating subset of configured topics.
+With two topics per run, all 16 default topics refresh every four hours while
+staying near the standard daily YouTube quota. Topic searches use `order=date`,
+a 24-hour `publishedAfter` window,
+`type=video`, and `videoDuration=long`.
 
-`ENABLE_YOUTUBE_API` and `ENABLE_REDDIT_API` control which adapters are loaded.
-A disabled provider makes no authentication or API requests, even if its
-credentials remain in the environment file.
+Candidate IDs are deduplicated and enriched through `videos.list` in batches
+of 50. PostgreSQL stores the detected language, topic, metrics, subscriber
+snapshot, and viral score. The score weights view velocity at 35%; like ratio,
+comment ratio, and freshness at 15% each; and channel growth and subscriber
+ratio at 10% each. Factors are normalized as percentiles within each language
+and topic cohort. Videos may belong to multiple topics.
+Only videos whose YouTube metadata reports the `creativeCommon` license are
+stored or returned. Older non-reusable catalog rows are removed automatically.
 
-The default YouTube policy is optimized for source material that can become
-short-form clips:
+`GET /videos/recommendations` reads PostgreSQL and Redis only, filters by
+language and topic, orders by viral score, and returns at most
+`DISCOVERY_LIMIT` rows. User searches never call YouTube.
+`GET /videos/recommendations/status` reports scheduler timestamps, selected
+topics, partial failures, and collected video counts. Recommendations older
+than seven days and channel snapshots older than 30 days are removed
+automatically.
 
-- searches globally without restricting results to one country;
-- prioritizes English-language results;
-- limits discovery to videos published in the last 30 days;
-- orders candidates by view count as a practical viral signal;
-- requires Creative Commons (`CC BY`) videos;
-- requires embeddable videos that can play outside YouTube;
-- excludes YouTube's Music category and common music-title patterns;
-- excludes configured sensitive topics by matching whole words in titles and
-  descriptions, including religion, politics, elections, war, weapons,
-  violence, crime, adult content, gambling, and drugs;
-- excludes source videos shorter than three minutes;
-- searches only the configured priority topics when no keyword is provided:
-  podcasts, expert interviews, educational explainers, tutorials, founder and
-  business advice, career advice, technology, science, personal stories, life
-  lessons, debates, expert opinions, public-domain speeches, and documentaries.
-  The API query uses compact umbrella terms because overly long YouTube OR
-  expressions can return an empty result set.
-
-Adjust the window and minimum source duration with
-`YOUTUBE_DISCOVERY_DAYS` and `YOUTUBE_MIN_DURATION_SECONDS`. Set
-`YOUTUBE_REUSABLE_ONLY=false` only when you have another rights-checking
-workflow. Leave `YOUTUBE_REGION` empty for global discovery, or set an ISO
-3166-1 alpha-2 country code when regional discovery is needed. Customize the
-pipe-separated priority list with `YOUTUBE_DISCOVERY_QUERY`.
-Customize the comma-separated sensitive-topic list with
-`YOUTUBE_EXCLUDED_TERMS`. Keep the list reasonably short and use specific
-terms to avoid excluding unrelated educational content.
-
-The backend starts when an enabled provider is not configured, but that
-provider is omitted from discovery. Discovery returns results from every
-enabled, configured provider that responds successfully, so a temporary
-failure from one provider does not discard results from the other. If no
-provider is both enabled and configured, `/videos/search` returns HTTP `503`.
-
-Normalized discovery results are cached in Redis for six hours by default.
-Repeated trending searches, keyword searches, and link resolutions use the
-cache without calling YouTube or Reddit again. Set `DISCOVERY_CACHE_TTL=0s` to
-disable caching, or increase it to reduce provider usage further.
-
-Discovery returns at most `DISCOVERY_LIMIT` results and targets at least
-`DISCOVERY_MIN_RESULTS`. YouTube requests up to 50 candidates in the first
-search call. A second page is requested only when filtering leaves fewer than
-the configured minimum, keeping provider usage low while targeting 10–20
-results. The minimum is best-effort because YouTube may not have ten videos
-that satisfy every active safety, licensing, language, and duration filter.
+If the recommendation catalog is empty, backend startup immediately launches a
+background warm-up refresh. The status endpoint remains available so the
+frontend can report progress. Later restarts reuse the existing catalog and
+wait for the normal scheduler interval.
 
 ## Terminal-first development
 
@@ -308,7 +269,7 @@ contexts. Never commit, bake into an image, log, or share the cookie file.
 | `/signup`                | Account registration                     |
 | `/dashboard`             | Workspace overview and suggested sources |
 | `/clips`                 | Searchable generated-clips library       |
-| `/clips/trending-videos` | YouTube and Reddit discovery results     |
+| `/clips/recommendations` | Database-backed YouTube recommendations |
 | `/clips/review/:externalId` | Cached clip preview and multi-select    |
 | `/logs`                  | Persisted render jobs, progress, and retry |
 
@@ -324,14 +285,22 @@ persists only the authenticated session.
 | POST   | `/auth/register`                 | Register and receive a token pair            |
 | POST   | `/auth/login`                    | Authenticate and receive tokens              |
 | POST   | `/auth/refresh`                  | Rotate a valid refresh token                 |
-| GET    | `/videos/search`                 | Discover trending YouTube and Reddit videos  |
-| GET    | `/videos/search?keyword=podcast` | Search YouTube and Reddit videos             |
-| GET    | `/videos/search?url=https://...` | Resolve one supported YouTube or Reddit link |
+| GET    | `/videos/recommendations?language=en&keywords=podcast` | Query cached recommendations |
+| GET    | `/videos/search?url=https://...` | Resolve one supported YouTube link |
 | POST   | `/clips/analyze`                  | Queue subtitle extraction and clip analysis   |
 | GET    | `/clips/reviews/:externalId`       | Read a cached video review                     |
 | GET    | `/clips/reviews/:externalId/events` | Stream review progress using SSE              |
+| GET    | `/clips/rendered`                 | Paginated rendered clips library              |
+| GET    | `/renders`                       | Paginated render jobs                         |
+| GET    | `/renders/events`                | Stream render-job changes using SSE           |
 | GET    | `/api/jobs/:id/events`           | Stream analysis progress using SSE           |
 | GET    | `/api/logs`                      | List authenticated queue-job status          |
+
+`/clips/rendered` accepts `page`, `page_size`, `search`, and
+`sort=newest|oldest|score`. `/renders` accepts `page`, `page_size`,
+`status=queued|pending|processing|completed|failed|cancelled`, and
+`sort=newest|oldest|progress`. Filtering, ordering, counting, and pagination
+are applied by PostgreSQL; the frontend renders the returned page as-is.
 
 All `/videos/*`, `/clips/*`, and `/api/*` routes require an access token:
 
@@ -353,20 +322,14 @@ minutes by default. Refresh tokens expire after seven days, are backed by
 Redis, and rotate on every successful refresh; replaying a consumed refresh
 token is rejected.
 
-### Discovery behavior
+### Recommendation behavior
 
-Calling `/videos/search` without query parameters loads trending content:
+`/videos/recommendations?language=en&keywords=podcast` reads the persisted
+recommendation catalog, orders it by `viral_score DESC`, and caches the result.
+The endpoint never contacts YouTube. `/videos/search?url=...` remains available
+only for resolving a direct YouTube watch, Shorts, or `youtu.be` link.
 
-- YouTube uses the Data API `mostPopular` chart;
-- Reddit uses the authenticated `r/popular/hot` listing and keeps
-  Reddit-hosted video posts.
-
-The `keyword` and `url` parameters are mutually exclusive. Keyword searches
-rank YouTube results by view count and Reddit results by top score for the
-week. Link resolution accepts regular YouTube watch, Shorts, `youtu.be`, and
-Reddit post links.
-
-Both providers are normalized into `VideoSearchResult`:
+Recommendations are returned as `VideoSearchResult`:
 
 ```json
 {
@@ -388,22 +351,19 @@ Both providers are normalized into `VideoSearchResult`:
 }
 ```
 
-YouTube supplies views, likes, comments, thumbnails, and duration. Reddit
-supplies score, comments, thumbnail, duration, and a temporary playable media
-URL. The discovery service only reads metadata and playback URLs; it does not
-download source videos.
+YouTube supplies views, likes, comments, thumbnails, duration, language,
+publication time, and channel subscriber snapshots. The scheduler only reads
+metadata; it does not download source videos.
 
 `reusable: true` means YouTube reports a Creative Commons Attribution license.
 CC BY reuse requires attribution to the original creator. It is still your
 responsibility to confirm the license, third-party material, privacy rights,
-and platform policies before publishing. Reddit does not expose an equivalent
-reuse license through this integration, so Reddit results are not marked as
-reusable.
+and platform policies before publishing.
 
-From `/clips`, **Search Trending** opens the discovery page with trending
-results. **Clip By Link** resolves the submitted link on the same page. A
-result can be previewed in a responsive modal—YouTube uses an embed and Reddit
-uses its hosted video stream. Selecting **Clip** queues a YouTube analysis job
+From `/clips`, **Search Recommendation** opens the database-backed recommendation
+page. **Clip By Link** resolves the submitted link on the same page. A
+result can be previewed in a responsive modal with a YouTube embed. Selecting
+**Clip** queues a YouTube analysis job
 and opens its progress page.
 
 ### Transcript and clip pipeline
@@ -454,10 +414,42 @@ Each render produces one best-potential master cut. Before encoding, the worker
 detects and removes dead air and filler-only segments, samples the dominant face
 for speaker-aware vertical reframing, inserts subtle visual beats, generates a
 truthful opening hook, and emphasizes important phrases in the ASS captions.
+Packaging first extracts a structured main-context brief containing the topic,
+central claim, and payoff from the full selected transcript and source title.
+It then produces three title candidates and three independent hook candidates
+and scores their relevance to that brief before editorial validation. Publishing
+titles must be accurate, concise, payoff-led, and front-loaded; opening hooks
+must be 3-6 words, distinct from both the title and dialogue, and free of
+Markdown, generic clickbait, fragments, repeated words, or excessive capitals.
+Invalid AI output is replaced with separate deterministic title and hook
+fallbacks rather than copied transcript text.
 Review sections request the best compatible source up to 1080p. Final exports
 use Lanczos scaling, eased subject-following pans, short safe-area captions,
 larger boxed branding, the discovered YouTube handle, and high-quality H.264
 CRF 17 / AAC 192 kbps encoding.
+
+The upgraded pipeline snaps AI candidates to transcript sentence boundaries,
+uses sentence endings for visual beats, samples faces at three points per shot,
+locks small camera movements, and limits pan velocity. The opening uses a subtle
+push-in and fade while keeping the hook card brief. Caption chunks break on
+clauses, avoid orphan words, and allocate at least 700 ms when the timeline
+permits. Exact duplicate cues, progressive subtitle overlap, and cues spanning
+an edit boundary are collapsed before ASS generation.
+
+Every render uses Smart AI Auto Crop; there is no manual render-profile choice.
+The reframe planner samples each semantic shot, identifies the most active face
+from face size and mouth-region activity, falls back to object contours and
+frame-motion action detection, and produces a full-screen 9:16 crop. Pan and
+zoom are eased, velocity-limited, and stabilized with dead zones so the camera
+tracks meaningful movement rather than floating.
+
+Audio is mastered in two passes. FFmpeg first measures loudness and then applies
+an 80 Hz high-pass filter, light denoising, voice compression, EBU R128
+normalization to -16 LUFS / -1.5 dBTP, and a true-peak limiter. After encoding,
+the worker runs an FFprobe/FFmpeg quality gate that verifies 1080x1920 output,
+audio presence, planned duration, audio/video drift, black frames, frozen
+frames, and complete decodability. Failed validation marks the render failed
+instead of publishing a broken file.
 Ranked moments include a two-second context lead-in and a 1.2-second context
 tail. The renderer preserves those frames, mutes audio in both edge buffers,
 shows a large, outlined, subtitle-style hook in the center without a background
@@ -472,11 +464,19 @@ is preserved; naturally paced dialogue remains at its original speed.
 Published view, engagement, watch-time, and completion metrics can be recorded
 from the clip preview. These produce a viral score and teach later analyses the
 duration range that has performed best.
+Performance feedback also accepts engaged views, swipe-away percentage,
+replays, and the primary drop-off timestamp. These signals influence learned
+duration weighting. Source license and reusable status are retained from
+discovery, and the render dialog requires explicit confirmation that the user
+has permission to reuse the content.
 
-The background worker handles `SIGINT` and `SIGTERM` gracefully: it stops
-dequeueing new work, finishes and acknowledges the active job, closes Redis,
-and recovers jobs left in processing queues on the next startup. Docker grants
-render workers up to 15 minutes to finish an active FFmpeg render.
+The backend and background worker use two-stage shutdown. The first `SIGINT` or
+`SIGTERM` stops new intake and drains active HTTP requests or the current media
+job. A second signal force-closes the backend; the worker interrupts the active
+job and returns it to Redis so it can be recovered on the next start. Both
+processes close database and Redis connections before exiting. On Windows the
+job worker also handles `SIGBREAK`. Docker grants render workers up to 15
+minutes to finish an active FFmpeg render.
 
 SSE messages use the job status as the event name and send progress as JSON:
 
@@ -550,7 +550,7 @@ Included:
 - configuration loading;
 - infrastructure clients;
 - health endpoints;
-- normalized YouTube and Reddit video discovery without downloading media;
+- scheduled, database-backed YouTube recommendations without downloading media;
 - YouTube VTT subtitle extraction without downloading source media;
 - VTT-to-JSON transcript conversion;
 - Ollama clip ranking with `qwen2.5:7b`;

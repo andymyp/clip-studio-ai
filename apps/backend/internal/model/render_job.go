@@ -22,6 +22,15 @@ type RenderJob struct {
 	RemovedSeconds    float64   `gorm:"not null;default:0" json:"removed_seconds"`
 	PatternInterrupts int       `gorm:"not null;default:0" json:"pattern_interrupts"`
 	PlaybackSpeed     float64   `gorm:"not null;default:1" json:"playback_speed"`
+	PlatformProfile   string    `gorm:"size:32;not null;default:'smart';index" json:"platform_profile"`
+	ContentStyle      string    `gorm:"size:32;not null;default:'auto';index" json:"content_style"`
+	RightsConfirmed   bool      `gorm:"not null;default:false" json:"rights_confirmed"`
+	QualityPassed     bool      `gorm:"not null;default:false" json:"quality_passed"`
+	OutputWidth       int       `gorm:"not null;default:0" json:"output_width"`
+	OutputHeight      int       `gorm:"not null;default:0" json:"output_height"`
+	OutputDuration    float64   `gorm:"not null;default:0" json:"output_duration"`
+	AudioVideoDrift   float64   `gorm:"not null;default:0" json:"audio_video_drift"`
+	AudioLoudnessLUFS float64   `gorm:"not null;default:0" json:"audio_loudness_lufs"`
 
 	Clip        Clip              `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`
 	Performance []ClipPerformance `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"-"`

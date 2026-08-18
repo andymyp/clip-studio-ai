@@ -7,6 +7,8 @@ type Video struct {
 	UserID          uuid.UUID `gorm:"type:uuid;not null;index;uniqueIndex:idx_videos_user_platform_url" json:"user_id"`
 	ExternalID      string    `gorm:"size:160;index" json:"external_id"`
 	YouTubeUsername string    `gorm:"size:100" json:"youtube_username"`
+	License         string    `gorm:"size:100" json:"license"`
+	Reusable        bool      `gorm:"not null;default:false" json:"reusable"`
 	Platform        string    `gorm:"size:50;not null;uniqueIndex:idx_videos_user_platform_url" json:"platform"`
 	URL             string    `gorm:"type:text;not null;uniqueIndex:idx_videos_user_platform_url" json:"url"`
 	Title           string    `gorm:"type:text;not null" json:"title"`

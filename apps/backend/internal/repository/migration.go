@@ -37,6 +37,9 @@ func Migrate(db *gorm.DB) error {
 			&model.Clip{},
 			&model.RenderJob{},
 			&model.ClipPerformance{},
+			&model.RecommendedVideo{},
+			&model.RecommendationCategory{},
+			&model.ChannelMetricSnapshot{},
 		)
 	})
 	if err != nil {

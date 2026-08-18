@@ -5,10 +5,11 @@ import {
   CircleNotchIcon,
   ClockCounterClockwiseIcon,
 } from "@phosphor-icons/react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeading } from "@/components/page-heading";
+import { DataPagination } from "@/components/data-pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -31,21 +32,16 @@ const statusClasses: Record<string, string> = {
   completed: "border-emerald-200 bg-emerald-50 text-emerald-700",
   failed: "border-rose-200 bg-rose-50 text-rose-700",
 };
+const jobsPerPage = 10;
 
 export default function LogsPage() {
   useRenderJobEvents();
-  const jobs = useRenderJobs();
   const retry = useRetryRender();
   const [status, setStatus] = useState("all");
-  const [sort, setSort] = useState("newest");
-  const rows = useMemo(() => {
-    const filtered = (jobs.data ?? []).filter((job) => status === "all" || job.status === status);
-    return filtered.toSorted((a, b) => {
-      if (sort === "oldest") return +new Date(a.created_at) - +new Date(b.created_at);
-      if (sort === "progress") return b.progress - a.progress;
-      return +new Date(b.created_at) - +new Date(a.created_at);
-    });
-  }, [jobs.data, sort, status]);
+  const [sort, setSort] = useState<"newest" | "oldest" | "progress">("newest");
+  const [page, setPage] = useState(1);
+  const jobs = useRenderJobs({ page, pageSize: jobsPerPage, sort, status });
+  const rows = jobs.data?.items ?? [];
 
   async function retryJob(id: string) {
     try {
@@ -70,7 +66,7 @@ export default function LogsPage() {
         }
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}>
           <SelectTrigger className="bg-white sm:w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
@@ -80,7 +76,7 @@ export default function LogsPage() {
             <SelectItem value="failed">Failed</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={sort} onValueChange={setSort}>
+        <Select value={sort} onValueChange={(value: "newest" | "oldest" | "progress") => { setSort(value); setPage(1); }}>
           <SelectTrigger className="bg-white sm:w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="newest">Newest first</SelectItem>
@@ -92,7 +88,7 @@ export default function LogsPage() {
       <Card className="overflow-x-auto border-black/8 bg-white p-0 shadow-none">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="border-b bg-zinc-50 text-xs uppercase text-muted-foreground">
-            <tr><th className="p-4">Clip</th><th>Status</th><th>Progress</th><th>Updated</th><th className="pr-4 text-right">Action</th></tr>
+            <tr><th className="p-4">Clip</th><th>Status</th><th>Profile / QC</th><th>Progress</th><th>Updated</th><th className="pr-4 text-right">Action</th></tr>
           </thead>
           <tbody className="divide-y">
             {rows.map((job) => (
@@ -102,11 +98,20 @@ export default function LogsPage() {
                   <p className="truncate text-xs text-muted-foreground">{job.message || job.error}</p>
                 </td>
                 <td><Badge className={statusClasses[job.status]}>{job.status}</Badge></td>
-                <td className="w-52 pr-5">
-                  <div className="mb-1 flex justify-between text-xs"><span>{Math.round(job.progress)}%</span></div>
-                  <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-                    <div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }} />
+                <td>
+                  <div className="flex flex-col items-start gap-1">
+                    <Badge className="border border-zinc-200 bg-white text-zinc-700">
+                      {job.platform_profile === "smart" ? "Smart AI crop" : job.platform_profile}
+                    </Badge>
+                    {job.status === "completed" && (
+                      <span className={job.quality_passed ? "text-xs text-emerald-700" : "text-xs text-rose-700"}>
+                        {job.quality_passed ? `QC passed · ${job.output_width}×${job.output_height}` : "QC not verified"}
+                      </span>
+                    )}
                   </div>
+                </td>
+                <td className="pr-5 font-medium tabular-nums">
+                  {Math.round(job.progress)}%
                 </td>
                 <td className="text-xs text-muted-foreground">{new Date(job.updated_at).toLocaleString()}</td>
                 <td className="pr-4 text-right">
@@ -119,11 +124,20 @@ export default function LogsPage() {
               </tr>
             ))}
             {!jobs.isLoading && rows.length === 0 && (
-              <tr><td colSpan={5} className="p-16 text-center text-muted-foreground">No render jobs found.</td></tr>
+              <tr><td colSpan={6} className="p-16 text-center text-muted-foreground">No render jobs found.</td></tr>
             )}
           </tbody>
         </table>
       </Card>
+      {!jobs.isLoading && rows.length > 0 && (
+        <DataPagination
+          page={page}
+          pageSize={jobsPerPage}
+          totalItems={jobs.data?.total_items ?? 0}
+          onPageChange={setPage}
+          itemLabel="jobs"
+        />
+      )}
     </div>
   );
 }

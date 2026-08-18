@@ -34,6 +34,19 @@ export type VideoSearchResult = {
   reusable: boolean;
 };
 
+export type RecommendationSchedulerStatus = {
+  state: "waiting" | "running" | "completed" | "failed";
+  catalog_ready: boolean;
+  started_at?: string;
+  completed_at?: string;
+  last_success_at?: string;
+  keywords_requested?: string[];
+  keywords_succeeded?: string[];
+  keyword_errors?: Record<string, string>;
+  videos_collected: number;
+  error?: string;
+};
+
 export type GeneratedClip = {
   id: string;
   start: number;
@@ -53,6 +66,8 @@ export type ClipAnalysisJob = {
   platform: string;
   thumbnail: string;
   youtube_username: string;
+  license: string;
+  reusable: boolean;
   status: "queued" | "processing" | "completed" | "failed";
   progress: number;
   message: string;
@@ -108,8 +123,32 @@ export type RenderJob = {
   pattern_interrupts: number;
   source_username: string;
   playback_speed: number;
+  platform_profile: "smart" | "youtube" | "tiktok" | "instagram";
+  content_style:
+    | "auto"
+    | "talking_head"
+    | "gameplay"
+    | "comedy"
+    | "emotional"
+    | "livestream"
+    | "cinematic";
+  rights_confirmed: boolean;
+  quality_passed: boolean;
+  output_width: number;
+  output_height: number;
+  output_duration: number;
+  audio_video_drift: number;
+  audio_loudness_lufs: number;
   created_at: string;
   updated_at: string;
+};
+
+export type PaginatedResponse<T> = {
+  items: T[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
 };
 
 export type ClipPerformance = {
@@ -122,6 +161,10 @@ export type ClipPerformance = {
   shares: number;
   average_watch_seconds: number;
   completion_percentage: number;
+  engaged_views: number;
+  swiped_away_percentage: number;
+  replays: number;
+  dropoff_second: number;
   viral_score: number;
   created_at: string;
 };

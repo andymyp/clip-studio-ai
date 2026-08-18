@@ -22,6 +22,8 @@ class AnalyzeVideoRequest(BaseModel):
     platform: str
     thumbnail: str = ""
     youtube_username: str = ""
+    license: str = ""
+    reusable: bool = False
 
 
 class GeneratedClip(RankedClip):
@@ -39,6 +41,8 @@ class AnalysisJob(BaseModel):
     platform: str
     thumbnail: str = ""
     youtube_username: str = ""
+    license: str = ""
+    reusable: bool = False
     status: str
     progress: float
     message: str
@@ -57,6 +61,16 @@ class RenderRequest(BaseModel):
     watermark_text: str = ""
     source_url: str
     source_username: str = ""
+    source_title: str = ""
+    platform_profile: str = Field(
+        default="smart",
+        pattern="^(smart|youtube|tiktok|instagram)$",
+    )
+    content_style: str = Field(
+        default="auto",
+        pattern="^(auto|talking_head|gameplay|comedy|emotional|livestream|cinematic)$",
+    )
+    rights_confirmed: bool = False
 
 
 class MarketingMetadata(BaseModel):
@@ -74,11 +88,28 @@ class EditInterval(BaseModel):
 class OptimizationPlan(BaseModel):
     intervals: list[EditInterval]
     face_centers: list[float] = Field(default_factory=list)
+    layouts: list[str] = Field(default_factory=list)
+    zooms: list[float] = Field(default_factory=list)
     removed_seconds: float = 0
     hook: str = ""
     pattern_interrupts: list[float] = Field(default_factory=list)
     important_phrases: list[str] = Field(default_factory=list)
     playback_speed: float = 1.0
+    audio_loudness_lufs: float | None = None
+    platform_profile: str = "smart"
+    content_style: str = "auto"
+
+
+class QualityReport(BaseModel):
+    passed: bool = False
+    width: int = 0
+    height: int = 0
+    duration: float = 0
+    has_audio: bool = False
+    audio_video_drift: float = 0
+    black_frame_ratio: float = 0
+    frozen_frame_ratio: float = 0
+    warnings: list[str] = Field(default_factory=list)
 
 
 class RenderJobState(RenderRequest):
@@ -90,4 +121,5 @@ class RenderJobState(RenderRequest):
     subtitle_path: str = ""
     marketing: MarketingMetadata | None = None
     optimization: OptimizationPlan | None = None
+    quality: QualityReport | None = None
     error: str | None = None

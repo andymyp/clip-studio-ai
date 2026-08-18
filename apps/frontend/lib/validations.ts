@@ -44,6 +44,24 @@ export const videoSearchSchema = z.object({
     .max(100, "Search must contain at most 100 characters."),
 });
 
+export const trendingSearchSchema = z.object({
+  language: z.string().min(2, "Choose a language."),
+  content_style: z.enum([
+    "auto",
+    "talking_head",
+    "gameplay",
+    "comedy",
+    "emotional",
+    "livestream",
+    "cinematic",
+  ]),
+  keywords: z
+    .string()
+    .trim()
+    .min(2, "Keywords must contain at least 2 characters.")
+    .max(100, "Keywords must contain at most 100 characters."),
+});
+
 export const clipByLinkSchema = z.object({
   url: z
     .string()
@@ -60,11 +78,24 @@ export type AuthValues = z.infer<typeof authSchema>;
 export type ClipByLinkValues = z.infer<typeof clipByLinkSchema>;
 
 export const renderClipsSchema = z.object({
+  content_style: z.enum([
+    "auto",
+    "talking_head",
+    "gameplay",
+    "comedy",
+    "emotional",
+    "livestream",
+    "cinematic",
+  ]),
   watermark_text: z.string().trim().max(100, "Use 100 characters or fewer."),
+  rights_confirmed: z
+    .boolean()
+    .refine((value) => value, "Confirm that you have permission to reuse this content."),
 });
 
 export type RenderClipsValues = z.infer<typeof renderClipsSchema>;
 export type VideoSearchValues = z.infer<typeof videoSearchSchema>;
+export type TrendingSearchValues = z.infer<typeof trendingSearchSchema>;
 
 export const performanceFeedbackSchema = z.object({
   platform: z.enum(["youtube", "tiktok", "instagram"]),
@@ -74,6 +105,10 @@ export const performanceFeedbackSchema = z.object({
   shares: z.number().int().min(0),
   average_watch_seconds: z.number().min(0),
   completion_percentage: z.number().min(0).max(100),
+  engaged_views: z.number().int().min(0),
+  swiped_away_percentage: z.number().min(0).max(100),
+  replays: z.number().int().min(0),
+  dropoff_second: z.number().min(0),
 });
 
 export type PerformanceFeedbackValues = z.infer<typeof performanceFeedbackSchema>;

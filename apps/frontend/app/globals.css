@@ -125,6 +125,8 @@
 
   html {
     @apply font-sans;
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
   }
 
   body {
@@ -133,7 +135,7 @@
 
   body[data-scroll-locked] {
     margin-right: 0 !important;
-    padding-right: var(--removed-body-scroll-bar-size, 0px) !important;
+    padding-right: 0 !important;
     overflow: hidden !important;
     background-color: #f7f5f2;
   }

@@ -11,6 +11,15 @@ export function useCreateRenders() {
       external_id: string;
       clip_ids: string[];
       watermark_text: string;
+      content_style:
+        | "auto"
+        | "talking_head"
+        | "gameplay"
+        | "comedy"
+        | "emotional"
+        | "livestream"
+        | "cinematic";
+      rights_confirmed: boolean;
     }) => {
       progress.start();
       try {

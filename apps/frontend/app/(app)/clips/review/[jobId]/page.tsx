@@ -20,6 +20,13 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useCreateRenders } from "@/hooks/mutations/use-create-renders";
 import { useClipAnalysisEvents } from "@/hooks/sse/use-clip-analysis-events";
@@ -39,7 +46,11 @@ export default function ReviewClipsPage() {
   const createRenders = useCreateRenders();
   const renderForm = useForm<RenderClipsValues>({
     resolver: zodResolver(renderClipsSchema),
-    defaultValues: { watermark_text: "" },
+    defaultValues: {
+      content_style: "auto",
+      watermark_text: "",
+      rights_confirmed: false,
+    },
   });
 
   function submitRender(values: RenderClipsValues) {
@@ -47,7 +58,9 @@ export default function ReviewClipsPage() {
       {
         external_id: externalID,
         clip_ids: [...selected],
+        content_style: values.content_style,
         watermark_text: values.watermark_text,
+        rights_confirmed: values.rights_confirmed,
       },
       {
         onSuccess: (jobs) => {
@@ -94,7 +107,7 @@ export default function ReviewClipsPage() {
     <div className="space-y-7">
       <div>
         <Button asChild variant="ghost" className="-ml-2 mb-4">
-          <Link href="/clips/trending-videos">
+          <Link href="/clips/recommendations">
             <ArrowLeftIcon />
             Back to discovery
           </Link>
@@ -144,6 +157,35 @@ export default function ReviewClipsPage() {
             <fieldset disabled={createRenders.isPending}>
               <FormField
                 control={renderForm.control}
+                name="content_style"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Content style</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a content style" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto detect / general</SelectItem>
+                        <SelectItem value="talking_head">Podcast / talking head</SelectItem>
+                        <SelectItem value="gameplay">Gameplay / screen content</SelectItem>
+                        <SelectItem value="comedy">Comedy / funny</SelectItem>
+                        <SelectItem value="emotional">Sadness / emotional story</SelectItem>
+                        <SelectItem value="livestream">Livestream highlight</SelectItem>
+                        <SelectItem value="cinematic">Cinematic / visual story</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Controls pacing, silence removal, camera framing, and visual beat length.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={renderForm.control}
                 name="watermark_text"
                 render={({ field }) => (
                   <FormItem>
@@ -152,6 +194,37 @@ export default function ReviewClipsPage() {
                       <Input placeholder="@yourbrand" maxLength={100} {...field} />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                <p className="text-sm font-semibold text-violet-950">
+                  Smart AI Auto Crop
+                </p>
+                <p className="mt-1 text-xs leading-5 text-violet-800">
+                  Adapts framing and pacing to the selected content. Gameplay keeps
+                  the full screen visible; speaker-focused styles use a stable face crop.
+                </p>
+              </div>
+              <FormField
+                control={renderForm.control}
+                name="rights_confirmed"
+                render={({ field }) => (
+                  <FormItem className="mt-5 flex items-start gap-3 rounded-xl border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        aria-label="Confirm content reuse rights"
+                      />
+                    </FormControl>
+                    <div>
+                      <FormLabel>I have permission to reuse this content</FormLabel>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Confirm the source license or creator permission before rendering.
+                      </p>
+                      <FormMessage />
+                    </div>
                   </FormItem>
                 )}
               />
@@ -267,7 +340,7 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
       <h1 className="mt-4 font-heading text-xl font-semibold">{title}</h1>
       <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">{detail}</p>
       <Button asChild variant="outline" className="mt-5">
-        <Link href="/clips/trending-videos">Return to discovery</Link>
+        <Link href="/clips/recommendations">Return to recommendations</Link>
       </Button>
     </div>
   );

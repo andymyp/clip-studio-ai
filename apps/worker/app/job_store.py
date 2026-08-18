@@ -5,6 +5,9 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from app.schemas import AnalysisJob, AnalyzeVideoRequest
 
+COMPLETED_REVIEW_TTL_SECONDS = 30 * 60
+ACTIVE_JOB_TTL_SECONDS = 7 * 24 * 60 * 60
+
 
 class AnalysisJobStore:
     def __init__(self, client: Redis, queue_name: str) -> None:
@@ -25,6 +28,8 @@ class AnalysisJobStore:
             platform=payload.platform,
             thumbnail=payload.thumbnail,
             youtube_username=payload.youtube_username,
+            license=payload.license,
+            reusable=payload.reusable,
             status="queued",
             progress=0,
             message="Queued for subtitle extraction",
@@ -33,7 +38,7 @@ class AnalysisJobStore:
         self.client.set(
             self._review_key(payload.user_id, payload.platform, payload.external_id),
             job.id,
-            ex=30 * 24 * 60 * 60,
+            ex=COMPLETED_REVIEW_TTL_SECONDS,
         )
         self.client.lpush(self.queue_name, job.id)
         return job
@@ -45,7 +50,11 @@ class AnalysisJobStore:
         return AnalysisJob.model_validate_json(value)
 
     def save(self, job: AnalysisJob) -> None:
-        ttl = 30 * 24 * 60 * 60 if job.status == "completed" else 7 * 24 * 60 * 60
+        ttl = (
+            COMPLETED_REVIEW_TTL_SECONDS
+            if job.status == "completed"
+            else ACTIVE_JOB_TTL_SECONDS
+        )
         self.client.set(self._key(job.id), job.model_dump_json(), ex=ttl)
         if job.status == "completed":
             self.client.set(
@@ -87,10 +96,20 @@ class AnalysisJobStore:
         self.client.lrem(self.processing_queue_name, 1, job_id)
 
     def release(self, job_id: str) -> None:
-        pipe = self.client.pipeline()
-        pipe.lrem(self.processing_queue_name, 1, job_id)
-        pipe.rpush(self.queue_name, job_id)
-        pipe.execute()
+        # Only put the job back when it is still owned by this worker.  This
+        # keeps forced shutdown idempotent if a signal races with acknowledge().
+        self.client.eval(
+            """
+            if redis.call('LREM', KEYS[1], 1, ARGV[1]) == 1 then
+                return redis.call('RPUSH', KEYS[2], ARGV[1])
+            end
+            return 0
+            """,
+            2,
+            self.processing_queue_name,
+            self.queue_name,
+            job_id,
+        )
 
     def recover_interrupted(self) -> int:
         recovered = 0
@@ -120,4 +139,4 @@ class AnalysisJobStore:
     @staticmethod
     def _review_key(user_id: str, platform: str, external_id: str) -> str:
         # Version the ranking cache so algorithm changes do not serve stale scores.
-        return f"clipstudio:analysis:review:v4:{user_id}:{platform}:{external_id}"
+        return f"clipstudio:analysis:review:v5:{user_id}:{platform}:{external_id}"

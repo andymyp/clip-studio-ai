@@ -13,6 +13,8 @@ export function useCreateClipAnalysis() {
         platform: video.platform,
         thumbnail: video.thumbnail,
         youtube_username: video.youtube_username,
+        license: video.license,
+        reusable: video.reusable,
       });
       return data;
     },

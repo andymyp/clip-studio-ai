@@ -1,7 +1,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from app.schemas import TranscriptSegment
+from app.schemas import EditInterval, TranscriptSegment
 from app.services.retention import RetentionEditService
 
 
@@ -38,3 +38,19 @@ def test_preserves_intro_and_outro_context_buffers(tmp_path: Path) -> None:
     assert intervals[0].start == 0
     assert intervals[0].end >= 2
     assert intervals[-1].end == 10
+
+
+def test_remap_emits_cue_spanning_edit_boundary_only_once() -> None:
+    result = RetentionEditService().remap(
+        [
+            TranscriptSegment(
+                text="Never repeat this subtitle",
+                start=1.8,
+                end=2.4,
+            )
+        ],
+        [EditInterval(start=0, end=2), EditInterval(start=2.2, end=4)],
+    )
+
+    assert len(result) == 1
+    assert result[0].text == "Never repeat this subtitle"

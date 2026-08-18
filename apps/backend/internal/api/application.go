@@ -18,13 +18,14 @@ import (
 )
 
 type Dependencies struct {
-	DB           *gorm.DB
-	Database     *repository.Connection
-	Repositories *repository.Repositories
-	Redis        *redis.Client
-	AsynqClient  *asynq.Client
-	Logger       *zap.Logger
-	Auth         *service.AuthService
+	DB              *gorm.DB
+	Database        *repository.Connection
+	Repositories    *repository.Repositories
+	Redis           *redis.Client
+	AsynqClient     *asynq.Client
+	Logger          *zap.Logger
+	Auth            *service.AuthService
+	Recommendations *service.RecommendationScheduler
 }
 
 func Open(cfg Config) (*Dependencies, error) {
@@ -106,6 +107,7 @@ func Open(cfg Config) (*Dependencies, error) {
 }
 
 func (d *Dependencies) Close() {
+	d.Recommendations.Stop()
 	d.AsynqClient.Close()
 	_ = d.Redis.Close()
 	_ = d.Database.Close()
