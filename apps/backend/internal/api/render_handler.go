@@ -27,10 +27,11 @@ type RenderHandler struct {
 }
 
 type createRendersRequest struct {
-	ExternalID    string   `json:"external_id" binding:"required"`
-	ClipIDs       []string `json:"clip_ids" binding:"required,min=1,max=8"`
-	WatermarkText string   `json:"watermark_text" binding:"max=100"`
-	RightsConfirmed bool `json:"rights_confirmed" binding:"required"`
+	ExternalID      string   `json:"external_id" binding:"required"`
+	ClipIDs         []string `json:"clip_ids" binding:"required,min=1,max=8"`
+	WatermarkText   string   `json:"watermark_text" binding:"max=100"`
+	RightsConfirmed bool     `json:"rights_confirmed" binding:"required"`
+	ContentStyle    string   `json:"content_style" binding:"omitempty,oneof=auto talking_head gameplay comedy emotional livestream cinematic"`
 }
 
 type renderJobResponse struct {
@@ -56,6 +57,7 @@ type renderJobResponse struct {
 	SourceUsername    string          `json:"source_username"`
 	PlaybackSpeed     float64         `json:"playback_speed"`
 	PlatformProfile   string          `json:"platform_profile"`
+	ContentStyle      string          `json:"content_style"`
 	RightsConfirmed   bool            `json:"rights_confirmed"`
 	QualityPassed     bool            `json:"quality_passed"`
 	OutputWidth       int             `json:"output_width"`
@@ -108,6 +110,9 @@ func (handler *RenderHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "confirm that you have permission to reuse this content"})
 		return
 	}
+	if body.ContentStyle == "" {
+		body.ContentStyle = "auto"
+	}
 	userID, _ := middleware.UserID(c)
 	review, err := handler.worker.GetReview(c.Request.Context(), userID.String(), body.ExternalID)
 	if err != nil {
@@ -153,6 +158,7 @@ func (handler *RenderHandler) Create(c *gin.Context) {
 			Message: "Queued for rendering", WatermarkText: strings.TrimSpace(body.WatermarkText),
 			SourceURL: review.URL, SourceUsername: review.YouTubeUsername,
 			PlatformProfile: "smart", RightsConfirmed: body.RightsConfirmed,
+			ContentStyle: body.ContentStyle,
 		}
 		job.EnsureID()
 		if err = handler.db.WithContext(c.Request.Context()).Create(&job).Error; err != nil {
@@ -164,9 +170,10 @@ func (handler *RenderHandler) Create(c *gin.Context) {
 			ClipID: clip.ID.String(), ClipPath: clip.SourcePath,
 			Start: clip.StartTime, End: clip.EndTime,
 			WatermarkText: job.WatermarkText, SourceURL: job.SourceURL,
-			SourceUsername: job.SourceUsername,
-			SourceTitle: review.Title,
+			SourceUsername:  job.SourceUsername,
+			SourceTitle:     review.Title,
 			PlatformProfile: job.PlatformProfile, RightsConfirmed: job.RightsConfirmed,
+			ContentStyle: job.ContentStyle,
 		})
 		if workerErr != nil {
 			job.Status, job.Message, job.Error = model.JobStatusFailed, "Could not queue render", workerErr.Error()
@@ -366,12 +373,12 @@ func (handler *RenderHandler) CreateFeedback(c *gin.Context) {
 		return
 	}
 	signal, _ := json.Marshal(map[string]float64{
-		"duration":    job.Clip.EndTime - job.Clip.StartTime,
-		"viral_score": viralScore,
-		"engaged_rate": engagedRate,
-		"replay_rate": replayRate,
+		"duration":               job.Clip.EndTime - job.Clip.StartTime,
+		"viral_score":            viralScore,
+		"engaged_rate":           engagedRate,
+		"replay_rate":            replayRate,
 		"swiped_away_percentage": body.SwipedAwayPct,
-		"dropoff_second": body.DropoffSecond,
+		"dropoff_second":         body.DropoffSecond,
 	})
 	pipe := handler.redis.Pipeline()
 	pipe.LPush(c.Request.Context(), "clipstudio:ranking:outcomes", signal)
@@ -420,7 +427,7 @@ func (handler *RenderHandler) findOrCreateVideo(
 		UserID: userID, ExternalID: review.ExternalID, Platform: review.Platform,
 		URL: review.URL, Title: review.Title, Thumbnail: review.Thumbnail,
 		YouTubeUsername: review.YouTubeUsername,
-		License: review.License, Reusable: review.Reusable,
+		License:         review.License, Reusable: review.Reusable,
 	}
 	video.EnsureID()
 	return &video, handler.db.WithContext(c.Request.Context()).Create(&video).Error
@@ -549,6 +556,7 @@ func renderResponse(job model.RenderJob) renderJobResponse {
 		SourceUsername:    job.SourceUsername,
 		PlaybackSpeed:     job.PlaybackSpeed,
 		PlatformProfile:   job.PlatformProfile,
+		ContentStyle:      job.ContentStyle,
 		RightsConfirmed:   job.RightsConfirmed,
 		QualityPassed:     job.QualityPassed,
 		OutputWidth:       job.OutputWidth,

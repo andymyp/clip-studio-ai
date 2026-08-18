@@ -124,6 +124,14 @@ export type RenderJob = {
   source_username: string;
   playback_speed: number;
   platform_profile: "smart" | "youtube" | "tiktok" | "instagram";
+  content_style:
+    | "auto"
+    | "talking_head"
+    | "gameplay"
+    | "comedy"
+    | "emotional"
+    | "livestream"
+    | "cinematic";
   rights_confirmed: boolean;
   quality_passed: boolean;
   output_width: number;

@@ -72,6 +72,7 @@ export default function ClipsPage() {
     const params = new URLSearchParams({
       language: values.language,
       keywords: values.keywords.trim(),
+      content_style: values.content_style,
     });
     router.push(`/clips/recommendations?${params.toString()}`);
   }

@@ -38,7 +38,13 @@ export default function RecommendationsPage() {
   const sourceURL = searchParams.get("url")?.trim() || undefined;
   const keywords = searchParams.get("keywords")?.trim() || undefined;
   const language = searchParams.get("language")?.trim() || undefined;
-  const discovery = useVideoDiscovery({ url: sourceURL, keywords, language });
+  const contentStyle = searchParams.get("content_style")?.trim() || undefined;
+  const discovery = useVideoDiscovery({
+    url: sourceURL,
+    keywords,
+    language,
+    content_style: contentStyle,
+  });
   const [preview, setPreview] = useState<VideoSearchResult | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const createAnalysis = useCreateClipAnalysis();
@@ -140,7 +146,7 @@ export default function RecommendationsPage() {
         open={searchOpen}
         onOpenChange={setSearchOpen}
         onSearch={refineSearch}
-        values={{ language, keywords }}
+        values={{ language, keywords, content_style: contentStyle as TrendingSearchValues["content_style"] }}
       />
     </div>
   );

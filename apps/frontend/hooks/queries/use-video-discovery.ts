@@ -6,6 +6,7 @@ import type { VideoSearchResult } from "@/lib/types";
 type DiscoveryParams = {
   keywords?: string;
   language?: string;
+  content_style?: string;
   url?: string;
 };
 

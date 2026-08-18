@@ -56,19 +56,20 @@ type WorkerAnalysisJob struct {
 }
 
 type WorkerRenderRequest struct {
-	ID             string  `json:"id"`
-	UserID         string  `json:"user_id"`
-	AnalysisJobID  string  `json:"analysis_job_id"`
-	ClipID         string  `json:"clip_id"`
-	ClipPath       string  `json:"clip_path"`
-	Start          float64 `json:"start"`
-	End            float64 `json:"end"`
-	WatermarkText  string  `json:"watermark_text"`
-	SourceURL      string  `json:"source_url"`
-	SourceUsername string  `json:"source_username"`
-	SourceTitle    string  `json:"source_title"`
-	PlatformProfile string `json:"platform_profile"`
-	RightsConfirmed bool `json:"rights_confirmed"`
+	ID              string  `json:"id"`
+	UserID          string  `json:"user_id"`
+	AnalysisJobID   string  `json:"analysis_job_id"`
+	ClipID          string  `json:"clip_id"`
+	ClipPath        string  `json:"clip_path"`
+	Start           float64 `json:"start"`
+	End             float64 `json:"end"`
+	WatermarkText   string  `json:"watermark_text"`
+	SourceURL       string  `json:"source_url"`
+	SourceUsername  string  `json:"source_username"`
+	SourceTitle     string  `json:"source_title"`
+	PlatformProfile string  `json:"platform_profile"`
+	ContentStyle    string  `json:"content_style"`
+	RightsConfirmed bool    `json:"rights_confirmed"`
 }
 
 type WorkerMarketing struct {

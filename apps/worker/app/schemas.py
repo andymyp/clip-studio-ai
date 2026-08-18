@@ -66,6 +66,10 @@ class RenderRequest(BaseModel):
         default="smart",
         pattern="^(smart|youtube|tiktok|instagram)$",
     )
+    content_style: str = Field(
+        default="auto",
+        pattern="^(auto|talking_head|gameplay|comedy|emotional|livestream|cinematic)$",
+    )
     rights_confirmed: bool = False
 
 
@@ -93,6 +97,7 @@ class OptimizationPlan(BaseModel):
     playback_speed: float = 1.0
     audio_loudness_lufs: float | None = None
     platform_profile: str = "smart"
+    content_style: str = "auto"
 
 
 class QualityReport(BaseModel):

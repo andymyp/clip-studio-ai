@@ -20,6 +20,13 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useCreateRenders } from "@/hooks/mutations/use-create-renders";
 import { useClipAnalysisEvents } from "@/hooks/sse/use-clip-analysis-events";
@@ -40,6 +47,7 @@ export default function ReviewClipsPage() {
   const renderForm = useForm<RenderClipsValues>({
     resolver: zodResolver(renderClipsSchema),
     defaultValues: {
+      content_style: "auto",
       watermark_text: "",
       rights_confirmed: false,
     },
@@ -50,6 +58,7 @@ export default function ReviewClipsPage() {
       {
         external_id: externalID,
         clip_ids: [...selected],
+        content_style: values.content_style,
         watermark_text: values.watermark_text,
         rights_confirmed: values.rights_confirmed,
       },
@@ -148,6 +157,35 @@ export default function ReviewClipsPage() {
             <fieldset disabled={createRenders.isPending}>
               <FormField
                 control={renderForm.control}
+                name="content_style"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Content style</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a content style" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto detect / general</SelectItem>
+                        <SelectItem value="talking_head">Podcast / talking head</SelectItem>
+                        <SelectItem value="gameplay">Gameplay / screen content</SelectItem>
+                        <SelectItem value="comedy">Comedy / funny</SelectItem>
+                        <SelectItem value="emotional">Sadness / emotional story</SelectItem>
+                        <SelectItem value="livestream">Livestream highlight</SelectItem>
+                        <SelectItem value="cinematic">Cinematic / visual story</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Controls pacing, silence removal, camera framing, and visual beat length.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={renderForm.control}
                 name="watermark_text"
                 render={({ field }) => (
                   <FormItem>
@@ -164,8 +202,8 @@ export default function ReviewClipsPage() {
                   Smart AI Auto Crop
                 </p>
                 <p className="mt-1 text-xs leading-5 text-violet-800">
-                  Tracks the active speaker, faces, objects, and action, then applies
-                  smooth full-screen pan and zoom automatically.
+                  Adapts framing and pacing to the selected content. Gameplay keeps
+                  the full screen visible; speaker-focused styles use a stable face crop.
                 </p>
               </div>
               <FormField

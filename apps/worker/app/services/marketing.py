@@ -26,6 +26,7 @@ class MarketingGenerator:
         self,
         transcript: list[TranscriptSegment],
         source_title: str = "",
+        content_style: str = "auto",
     ) -> MarketingMetadata:
         text = " ".join(segment.text for segment in transcript)
         schema = PackagingCandidates.model_json_schema()
@@ -62,6 +63,9 @@ class MarketingGenerator:
                         "role": "user",
                         "content": (
                             f"Source video title: {source_title or 'Unknown'}\n"
+                            f"Editing style: {content_style}\n"
+                            "Match the emotional tone and hook language to that style "
+                            "without inventing events or exaggerating the source.\n"
                             f"Selected clip transcript:\n{text[:6000]}"
                         ),
                     },

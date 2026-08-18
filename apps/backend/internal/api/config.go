@@ -65,7 +65,7 @@ func LoadConfig() Config {
 		YouTubeRegion:    env("YOUTUBE_REGION", ""),
 		RecommendationKeywords: env(
 			"YOUTUBE_RECOMMENDATION_KEYWORDS",
-			"podcast,interview,debate,speech,documentary,education,science,technology,history,business,startup,finance,psychology,motivation,health,story",
+			"podcast,interview,debate,speech,documentary,education,science,technology,history,business,startup,finance,psychology,motivation,health,story,gameplay,gaming,esports,walkthrough,comedy,funny,humor,emotional,sadness,livestream,stream highlights,live,cinematic",
 		),
 		RecommendationInterval:       envDuration("RECOMMENDATION_SYNC_INTERVAL", 30*time.Minute),
 		RecommendationKeywordsPerRun: envInt("RECOMMENDATION_KEYWORDS_PER_RUN", 2),

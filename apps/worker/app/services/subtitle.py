@@ -21,6 +21,7 @@ class SubtitleGenerator:
         output: Path,
         important_phrases: list[str] | None = None,
         platform_profile: str = "youtube",
+        content_style: str = "auto",
     ) -> Path:
         output.parent.mkdir(parents=True, exist_ok=True)
         phrase_words = {
@@ -34,7 +35,8 @@ class SubtitleGenerator:
             words = _sanitize_caption(segment.text).split()
             if not words:
                 continue
-            chunks = _caption_chunks(words)
+            maximum_words, maximum_chars = _caption_limits(content_style)
+            chunks = _caption_chunks(words, maximum_words, maximum_chars)
             chunk_durations = _chunk_durations(
                 chunks, max(0.01, segment.end - segment.start)
             )
@@ -75,6 +77,16 @@ def _caption_chunks(words: list[str], maximum_words: int = 4, maximum_chars: int
         if len(merged) <= maximum_words + 1 and len(" ".join(merged)) <= maximum_chars:
             chunks[-2:] = [merged]
     return chunks
+
+
+def _caption_limits(content_style: str) -> tuple[int, int]:
+    return {
+        "comedy": (3, 24),
+        "livestream": (3, 26),
+        "emotional": (5, 34),
+        "cinematic": (5, 36),
+        "gameplay": (4, 30),
+    }.get(content_style, (4, 28))
 
 
 def _deduplicate_segments(

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     clip_context_after: float = 1.2
     job_queue_name: str = "clipstudio:analysis:queue"
     render_queue_name: str = "clipstudio:render:queue"
+    review_cleanup_interval_seconds: int = 300
 
     # Support running from the repository root or apps/worker directory.
     model_config = SettingsConfigDict(

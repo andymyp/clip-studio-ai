@@ -46,6 +46,15 @@ export const videoSearchSchema = z.object({
 
 export const trendingSearchSchema = z.object({
   language: z.string().min(2, "Choose a language."),
+  content_style: z.enum([
+    "auto",
+    "talking_head",
+    "gameplay",
+    "comedy",
+    "emotional",
+    "livestream",
+    "cinematic",
+  ]),
   keywords: z
     .string()
     .trim()
@@ -69,6 +78,15 @@ export type AuthValues = z.infer<typeof authSchema>;
 export type ClipByLinkValues = z.infer<typeof clipByLinkSchema>;
 
 export const renderClipsSchema = z.object({
+  content_style: z.enum([
+    "auto",
+    "talking_head",
+    "gameplay",
+    "comedy",
+    "emotional",
+    "livestream",
+    "cinematic",
+  ]),
   watermark_text: z.string().trim().max(100, "Use 100 characters or fewer."),
   rights_confirmed: z
     .boolean()

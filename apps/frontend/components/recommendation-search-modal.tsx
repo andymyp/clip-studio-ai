@@ -3,7 +3,7 @@
 import { SparkleIcon } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -18,6 +18,7 @@ import { useRecommendationSearchStore } from "@/stores/recommendation-search-sto
 const defaults: TrendingSearchValues = {
   language: "en",
   keywords: "trending",
+  content_style: "auto",
 };
 
 type RecommendationSearchModalProps = {
@@ -35,13 +36,19 @@ export function RecommendationSearchModal({
 }: RecommendationSearchModalProps) {
   const persistedLanguage = useRecommendationSearchStore((state) => state.language);
   const persistedTopic = useRecommendationSearchStore((state) => state.topic);
+  const persistedContentStyle = useRecommendationSearchStore((state) => state.contentStyle);
   const hydrated = useRecommendationSearchStore((state) => state.hydrated);
   const setPersistedSearch = useRecommendationSearchStore((state) => state.setSearch);
   const suppliedLanguage = values?.language;
   const suppliedKeywords = values?.keywords;
+  const suppliedContentStyle = values?.content_style;
   const form = useForm<TrendingSearchValues>({
     resolver: zodResolver(trendingSearchSchema),
     defaultValues: defaults,
+  });
+  const selectedContentStyle = useWatch({
+    control: form.control,
+    name: "content_style",
   });
 
   useEffect(() => {
@@ -49,6 +56,7 @@ export function RecommendationSearchModal({
     const supplied = trendingSearchSchema.safeParse({
       language: suppliedLanguage,
       keywords: suppliedKeywords,
+      content_style: suppliedContentStyle,
     });
     if (supplied.success) {
       form.reset(supplied.data);
@@ -58,6 +66,7 @@ export function RecommendationSearchModal({
       form.reset({
         language: persistedLanguage,
         keywords: persistedTopic,
+        content_style: persistedContentStyle,
       });
     }
   }, [
@@ -66,6 +75,8 @@ export function RecommendationSearchModal({
     open,
     persistedLanguage,
     persistedTopic,
+    persistedContentStyle,
+    suppliedContentStyle,
     suppliedKeywords,
     suppliedLanguage,
   ]);
@@ -73,13 +84,14 @@ export function RecommendationSearchModal({
   function submit(formValues: TrendingSearchValues) {
     const normalized = {
       language: formValues.language,
+      content_style: formValues.content_style,
       keywords: formValues.keywords
         .split(",")
         .map((keyword) => keyword.trim())
         .filter(Boolean)
         .join(", "),
     };
-    setPersistedSearch(normalized.language, normalized.keywords);
+    setPersistedSearch(normalized.language, normalized.keywords, formValues.content_style);
     onOpenChange(false);
     onSearch(normalized);
   }
@@ -94,6 +106,30 @@ export function RecommendationSearchModal({
       <Form {...form}>
         <form className="space-y-5" onSubmit={form.handleSubmit(submit)}>
           <fieldset disabled={form.formState.isSubmitting} className="space-y-5">
+            <FormField
+              control={form.control}
+              name="content_style"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Content style</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="Select style" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto / general</SelectItem>
+                      <SelectItem value="talking_head">Podcast / talking head</SelectItem>
+                      <SelectItem value="gameplay">Gameplay</SelectItem>
+                      <SelectItem value="comedy">Comedy / funny</SelectItem>
+                      <SelectItem value="emotional">Sadness / emotional</SelectItem>
+                      <SelectItem value="livestream">Livestream highlights</SelectItem>
+                      <SelectItem value="cinematic">Cinematic / visual story</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="language"
@@ -124,8 +160,14 @@ export function RecommendationSearchModal({
               name="keywords"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Topic</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <FormLabel>
+                    {selectedContentStyle === "auto" ? "Topic" : "Topic (controlled by style)"}
+                  </FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={selectedContentStyle !== "auto"}
+                  >
                     <FormControl>
                       <SelectTrigger><SelectValue placeholder="Select topic" /></SelectTrigger>
                     </FormControl>

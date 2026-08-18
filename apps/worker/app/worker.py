@@ -4,6 +4,7 @@ import shutil
 import signal
 import subprocess
 import threading
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -32,7 +33,9 @@ from .services import (
     SubtitleGenerator,
     TranscriptService,
 )
+from .services.content_style import content_style_profile
 from .services.partial_downloader import PartialDownloadError
+from .services.review_cleanup import ReviewFileSweeper
 
 logging.basicConfig(
     level=logging.INFO,
@@ -109,6 +112,7 @@ class AnalysisJobProcessor:
         self.storage = Path(settings.storage_path).resolve()
         self.context_before = settings.clip_context_before
         self.context_after = settings.clip_context_after
+        self.review_cleanup_interval = max(settings.review_cleanup_interval_seconds, 60)
 
     def process(self, job_id: str) -> None:
         job = self.store.get(job_id)
@@ -287,6 +291,7 @@ class RenderJobProcessor:
             if self.storage not in clip.parents:
                 raise RuntimeError("Clip path is outside storage")
             duration = job.end - job.start
+            style = content_style_profile(job.content_style)
             self._progress(job, 20, "Removing dead air and filler")
             intro_silence = min(self.context_before, 1.35, max(0.85, duration * 0.06))
             outro_silence = min(self.context_after, 0.9, max(0.5, duration * 0.05))
@@ -296,6 +301,9 @@ class RenderJobProcessor:
                 transcript,
                 preserve_start=intro_silence,
                 preserve_end=outro_silence,
+                silence_threshold=style.silence_threshold,
+                breath_padding=style.breath_padding,
+                remove_fillers=style.remove_fillers,
             )
             source_transcript = transcript
             transcript = self.retention.remap(source_transcript, retention_intervals)
@@ -321,12 +329,26 @@ class RenderJobProcessor:
 
             # Split long continuous sections into visual beats. Audio remains continuous,
             # while each beat can use an updated face center and subtle punch-in.
-            visual_intervals = _visual_beats(retention_intervals, source_transcript)
+            visual_intervals = _visual_beats(
+                retention_intervals,
+                source_transcript,
+                style.beat_minimum,
+                style.beat_maximum,
+            )
             self._progress(job, 30, "Tracking the primary speaker")
-            centers, layouts, zooms = self.reframe.plan(clip, visual_intervals)
+            if style.framing == "fit":
+                centers = [0.5] * len(visual_intervals)
+                layouts = ["fit"] * len(visual_intervals)
+                zooms = [1.0] * len(visual_intervals)
+            else:
+                centers, layouts, zooms = self.reframe.plan(clip, visual_intervals)
 
             self._progress(job, 38, "Choosing the strongest hook and packaging")
-            job.marketing = self.marketing.generate(transcript, job.source_title)
+            job.marketing = self.marketing.generate(
+                transcript,
+                job.source_title,
+                style.key,
+            )
             attribution = " | ".join(
                 value
                 for value in (
@@ -336,6 +358,7 @@ class RenderJobProcessor:
                 )
                 if value
             )
+            playback_speed = max(style.minimum_speed, playback_speed)
             job.marketing.description = (
                 f"{job.marketing.description.rstrip()}\n\nSource: {attribution}"
             )
@@ -355,6 +378,7 @@ class RenderJobProcessor:
                 output_directory / "subtitle.ass",
                 important_phrases=important_phrases,
                 platform_profile=job.platform_profile,
+                content_style=style.key,
             )
             job.subtitle_path = str(subtitle.relative_to(self.storage))
             job.optimization = OptimizationPlan(
@@ -372,6 +396,7 @@ class RenderJobProcessor:
                 important_phrases=[value for value in important_phrases if value],
                 playback_speed=playback_speed,
                 platform_profile=job.platform_profile,
+                content_style=style.key,
             )
             self._progress(job, 48, "Dynamic Shorts captions generated")
             self._progress(job, 52, "Measuring and mastering speech audio")
@@ -490,6 +515,12 @@ def _readability_speed(
 def run() -> None:
     processor = AnalysisJobProcessor()
     render_processor = RenderJobProcessor()
+    sweeper = ReviewFileSweeper(
+        processor.store.client,
+        processor.storage,
+        processor.store.queue_name,
+    )
+    next_cleanup = 0.0
     try:
         processor.store.client.ping()
         render_processor.store.client.ping()
@@ -502,6 +533,14 @@ def run() -> None:
         logger.info("Background worker is ready")
         while not shutdown.is_set():
             try:
+                if time.monotonic() >= next_cleanup:
+                    try:
+                        removed = sweeper.sweep()
+                        if removed:
+                            logger.info("Removed %s expired review file set(s)", removed)
+                    except OSError:
+                        logger.exception("Could not clean expired review files")
+                    next_cleanup = time.monotonic() + processor.review_cleanup_interval
                 job_id = processor.store.wait(timeout=2)
                 if job_id:
                     if shutdown.is_set():

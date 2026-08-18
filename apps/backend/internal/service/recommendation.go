@@ -64,11 +64,19 @@ func (service *RecommendationService) Search(
 	ctx context.Context,
 	language string,
 	category string,
+	contentStyle ...string,
 ) ([]model.VideoSearchResult, error) {
 	language = normalizeLanguage(language)
 	category = strings.ToLower(strings.TrimSpace(category))
+	style := "auto"
+	if len(contentStyle) > 0 && strings.TrimSpace(contentStyle[0]) != "" {
+		style = strings.ToLower(strings.TrimSpace(contentStyle[0]))
+	}
+	categories := recommendationStyleCategories(style, category)
+	terms := recommendationStyleTerms(style)
+	categoryIDs := recommendationStyleCategoryIDs(style)
 	version, _ := service.redis.Get(ctx, "recommendations:version").Result()
-	cacheKey := fmt.Sprintf("recommendations:v2:%s:%s:%s", version, language, category)
+	cacheKey := fmt.Sprintf("recommendations:v5:%s:%s:%s:%s", version, language, category, style)
 	if payload, err := service.redis.Get(ctx, cacheKey).Bytes(); err == nil {
 		var cached []model.VideoSearchResult
 		if json.Unmarshal(payload, &cached) == nil {
@@ -77,30 +85,97 @@ func (service *RecommendationService) Search(
 	}
 
 	var videos []model.RecommendedVideo
-	err := service.db.WithContext(ctx).
+	query := service.db.WithContext(ctx).
 		Table("recommended_videos").
 		Select("recommended_videos.*, recommendation_categories.viral_score").
 		Joins("JOIN recommendation_categories ON recommendation_categories.video_id = recommended_videos.id").
 		Where(
-			"recommendation_categories.language = ? AND recommendation_categories.category = ? AND recommended_videos.reusable = ?",
+			"recommendation_categories.language = ? AND recommended_videos.reusable = ?",
 			language,
-			category,
 			true,
-		).
+		)
+	condition, arguments := recommendationStyleCondition(categories, terms, categoryIDs)
+	err := query.Where(condition, arguments...).
 		Order("recommendation_categories.viral_score DESC, recommended_videos.published_at DESC").
-		Limit(service.limit).
+		Limit(service.limit * max(len(categories), 3)).
 		Scan(&videos).Error
 	if err != nil {
 		return nil, fmt.Errorf("query recommendations: %w", err)
 	}
-	results := make([]model.VideoSearchResult, 0, len(videos))
+	results := make([]model.VideoSearchResult, 0, min(len(videos), service.limit))
+	seen := make(map[string]struct{}, len(videos))
 	for _, video := range videos {
+		if _, exists := seen[video.ExternalID]; exists {
+			continue
+		}
+		seen[video.ExternalID] = struct{}{}
 		results = append(results, recommendationResult(video))
+		if len(results) == service.limit {
+			break
+		}
 	}
 	if payload, err := json.Marshal(results); err == nil {
 		_ = service.redis.Set(ctx, cacheKey, payload, service.cacheTTL).Err()
 	}
 	return results, nil
+}
+
+func recommendationStyleCategories(style string, topic string) []string {
+	styles := map[string][]string{
+		"talking_head": {"podcast", "interview", "debate", "speech"},
+		"gameplay":     {"gameplay", "gaming", "esports", "walkthrough"},
+		"comedy":       {"comedy", "funny", "humor"},
+		"emotional":    {"emotional", "sadness", "story", "motivation"},
+		"livestream":   {"livestream", "stream highlights", "live"},
+		"cinematic":    {"cinematic", "documentary", "story"},
+	}
+	if categories, exists := styles[style]; exists {
+		return categories
+	}
+	if topic == "" {
+		return []string{"trending"}
+	}
+	return []string{topic}
+}
+
+func recommendationStyleTerms(style string) []string {
+	return map[string][]string{
+		"talking_head": {"podcast", "interview", "debate", "speech", "conversation"},
+		"gameplay":     {"gameplay", "gaming", "esports", "walkthrough", "playthrough"},
+		"comedy":       {"comedy", "funny", "humor", "joke", "prank"},
+		"emotional":    {"emotional", "sad", "sadness", "heartbreaking", "inspiring"},
+		"livestream":   {"livestream", "live stream", "stream highlight", "streaming"},
+		"cinematic":    {"cinematic", "documentary", "short film", "visual story"},
+	}[style]
+}
+
+func recommendationStyleCategoryIDs(style string) []string {
+	return map[string][]string{
+		"talking_head": {"22", "27", "28"},
+		"gameplay":     {"20"},
+		"comedy":       {"23"},
+		"emotional":    {"22", "24"},
+		"livestream":   {"20", "22", "24"},
+		"cinematic":    {"1", "24"},
+	}[style]
+}
+
+func recommendationStyleCondition(
+	categories []string,
+	terms []string,
+	categoryIDs []string,
+) (string, []any) {
+	condition := "(recommendation_categories.category IN ?"
+	arguments := []any{categories}
+	if len(categoryIDs) > 0 {
+		condition += " OR recommended_videos.category_id IN ?"
+		arguments = append(arguments, categoryIDs)
+	}
+	for _, term := range terms {
+		condition += " OR LOWER(recommended_videos.title || ' ' || COALESCE(recommended_videos.description, '')) LIKE ?"
+		arguments = append(arguments, "%"+term+"%")
+	}
+	return condition + ")", arguments
 }
 
 func (service *RecommendationService) Status(
@@ -550,11 +625,9 @@ func (scheduler *RecommendationScheduler) Start() {
 	}
 	go func() {
 		defer close(scheduler.done)
-		if !hasCatalog {
-			// Start immediately but leave the status endpoint available so the
-			// frontend can report warm-up progress.
-			scheduler.run(ctx)
-		}
+		// Refresh immediately on every startup. This also starts filling newly
+		// configured categories when an older catalog already exists.
+		scheduler.run(ctx)
 		ticker := time.NewTicker(scheduler.interval)
 		defer ticker.Stop()
 		for {

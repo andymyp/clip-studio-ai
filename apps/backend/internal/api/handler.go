@@ -20,9 +20,10 @@ type Handler struct {
 }
 
 type searchQuery struct {
-	Keywords string `validate:"omitempty,min=2,max=100"`
-	Language string `validate:"omitempty,alpha,min=2,max=10"`
-	URL      string `validate:"omitempty,url,max=2048"`
+	Keywords     string `validate:"omitempty,min=2,max=100"`
+	Language     string `validate:"omitempty,alpha,min=2,max=10"`
+	URL          string `validate:"omitempty,url,max=2048"`
+	ContentStyle string `validate:"omitempty,oneof=auto talking_head gameplay comedy emotional livestream cinematic"`
 }
 
 func NewHandler(
@@ -45,9 +46,10 @@ func (handler *Handler) Health(c *gin.Context) {
 
 func (handler *Handler) SearchVideos(c *gin.Context) {
 	query := searchQuery{
-		Keywords: strings.TrimSpace(c.Query("keywords")),
-		Language: strings.TrimSpace(c.Query("language")),
-		URL:      strings.TrimSpace(c.Query("url")),
+		Keywords:     strings.TrimSpace(c.Query("keywords")),
+		Language:     strings.TrimSpace(c.Query("language")),
+		URL:          strings.TrimSpace(c.Query("url")),
+		ContentStyle: strings.TrimSpace(c.Query("content_style")),
 	}
 	if query.Keywords == "" {
 		query.Keywords = strings.TrimSpace(c.Query("keyword"))
@@ -69,7 +71,7 @@ func (handler *Handler) SearchVideos(c *gin.Context) {
 	if query.URL == "" && handler.recommendations != nil {
 		category := strings.Split(query.Keywords, ",")[0]
 		results, err = handler.recommendations.Search(
-			c.Request.Context(), query.Language, category,
+			c.Request.Context(), query.Language, category, query.ContentStyle,
 		)
 	} else {
 		results, err = handler.discovery.Resolve(c.Request.Context(), query.URL)

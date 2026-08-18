@@ -5,6 +5,9 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from app.schemas import AnalysisJob, AnalyzeVideoRequest
 
+COMPLETED_REVIEW_TTL_SECONDS = 30 * 60
+ACTIVE_JOB_TTL_SECONDS = 7 * 24 * 60 * 60
+
 
 class AnalysisJobStore:
     def __init__(self, client: Redis, queue_name: str) -> None:
@@ -35,7 +38,7 @@ class AnalysisJobStore:
         self.client.set(
             self._review_key(payload.user_id, payload.platform, payload.external_id),
             job.id,
-            ex=30 * 24 * 60 * 60,
+            ex=COMPLETED_REVIEW_TTL_SECONDS,
         )
         self.client.lpush(self.queue_name, job.id)
         return job
@@ -47,7 +50,11 @@ class AnalysisJobStore:
         return AnalysisJob.model_validate_json(value)
 
     def save(self, job: AnalysisJob) -> None:
-        ttl = 30 * 24 * 60 * 60 if job.status == "completed" else 7 * 24 * 60 * 60
+        ttl = (
+            COMPLETED_REVIEW_TTL_SECONDS
+            if job.status == "completed"
+            else ACTIVE_JOB_TTL_SECONDS
+        )
         self.client.set(self._key(job.id), job.model_dump_json(), ex=ttl)
         if job.status == "completed":
             self.client.set(

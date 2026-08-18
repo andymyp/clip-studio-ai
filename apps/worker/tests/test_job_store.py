@@ -3,8 +3,8 @@ from unittest.mock import Mock
 
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from app.job_store import AnalysisJobStore
-from app.schemas import AnalyzeVideoRequest
+from app.job_store import COMPLETED_REVIEW_TTL_SECONDS, AnalysisJobStore
+from app.schemas import AnalysisJob, AnalyzeVideoRequest
 
 
 def test_wait_treats_idle_socket_timeout_as_empty_queue() -> None:
@@ -82,3 +82,28 @@ def test_create_reuses_cached_successful_review() -> None:
 
     assert result.id == "cached-job"
     client.lpush.assert_not_called()
+
+
+def test_completed_review_and_job_expire_after_thirty_minutes() -> None:
+    client = Mock()
+    store = AnalysisJobStore(client, "analysis")
+    job = AnalysisJob(
+        id="job-id",
+        user_id="user-id",
+        external_id="video-id",
+        url="https://youtube.com/watch?v=video-id",
+        title="Test",
+        platform="youtube",
+        status="completed",
+        progress=100,
+        message="Generated clips",
+    )
+
+    store.save(job)
+
+    assert COMPLETED_REVIEW_TTL_SECONDS == 30 * 60
+    assert client.set.call_count == 2
+    assert all(
+        call.kwargs["ex"] == COMPLETED_REVIEW_TTL_SECONDS
+        for call in client.set.call_args_list
+    )

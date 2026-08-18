@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -50,5 +51,35 @@ func TestDeduplicateRecommendationsUsesExternalID(t *testing.T) {
 	}
 	if videos[0].Views != 20 || len(videos[0].Categories) != 2 {
 		t.Fatalf("deduplicateRecommendations() = %#v", videos[0])
+	}
+}
+
+func TestRecommendationStyleCategories(t *testing.T) {
+	gameplay := recommendationStyleCategories("gameplay", "trending")
+	if len(gameplay) != 4 || gameplay[0] != "gameplay" {
+		t.Fatalf("gameplay categories = %#v", gameplay)
+	}
+
+	auto := recommendationStyleCategories("auto", "science")
+	if len(auto) != 1 || auto[0] != "science" {
+		t.Fatalf("auto categories = %#v", auto)
+	}
+}
+
+func TestRecommendationStyleConditionIncludesMetadataSignals(t *testing.T) {
+	condition, arguments := recommendationStyleCondition(
+		recommendationStyleCategories("gameplay", "trending"),
+		recommendationStyleTerms("gameplay"),
+		recommendationStyleCategoryIDs("gameplay"),
+	)
+
+	if !strings.Contains(condition, "recommended_videos.title") {
+		t.Fatalf("condition does not search video metadata: %s", condition)
+	}
+	if !strings.Contains(condition, "category_id IN") {
+		t.Fatalf("condition does not search YouTube category ID: %s", condition)
+	}
+	if len(arguments) != 7 {
+		t.Fatalf("arguments count = %d, want 7", len(arguments))
 	}
 }

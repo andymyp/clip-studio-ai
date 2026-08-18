@@ -19,10 +19,13 @@ class RetentionEditService:
         transcript: list[TranscriptSegment] | None = None,
         preserve_start: float = 0,
         preserve_end: float = 0,
+        silence_threshold: float = 0.65,
+        breath_padding: float = 0.12,
+        remove_fillers: bool = True,
     ) -> list[EditInterval]:
         command = [
             "ffmpeg", "-hide_banner", "-i", str(clip), "-af",
-            "silencedetect=noise=-38dB:d=0.65", "-f", "null", "-",
+            f"silencedetect=noise=-38dB:d={silence_threshold:g}", "-f", "null", "-",
         ]
         completed = subprocess.run(
             command, capture_output=True, text=True, timeout=120, check=False
@@ -37,12 +40,12 @@ class RetentionEditService:
             end = float(end_match.group(1))
             silence_duration = float(duration_match.group(1))
             start = max(0, end - silence_duration)
-            # Retain a natural 120 ms breath on both sides.
-            if silence_duration >= 0.65:
-                silences.append((start + 0.12, end - 0.12))
-        for segment in transcript or []:
-            if segment.text.lower().strip(".,!? ") in FILLERS:
-                silences.append((segment.start, segment.end))
+            if silence_duration >= silence_threshold:
+                silences.append((start + breath_padding, max(start + breath_padding, end - breath_padding)))
+        if remove_fillers:
+            for segment in transcript or []:
+                if segment.text.lower().strip(".,!? ") in FILLERS:
+                    silences.append((segment.start, segment.end))
         protected_end = max(0, duration - preserve_end)
         removable = [
             (max(start, preserve_start), min(end, protected_end))

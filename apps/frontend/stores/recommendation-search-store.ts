@@ -6,8 +6,9 @@ import { persist } from "zustand/middleware";
 type RecommendationSearchState = {
   language: string;
   topic: string;
+  contentStyle: "auto" | "talking_head" | "gameplay" | "comedy" | "emotional" | "livestream" | "cinematic";
   hydrated: boolean;
-  setSearch: (language: string, topic: string) => void;
+  setSearch: (language: string, topic: string, contentStyle: RecommendationSearchState["contentStyle"]) => void;
   setHydrated: (hydrated: boolean) => void;
 };
 
@@ -16,13 +17,14 @@ export const useRecommendationSearchStore = create<RecommendationSearchState>()(
     (set) => ({
       language: "en",
       topic: "trending",
+      contentStyle: "auto",
       hydrated: false,
-      setSearch: (language, topic) => set({ language, topic }),
+      setSearch: (language, topic, contentStyle) => set({ language, topic, contentStyle }),
       setHydrated: (hydrated) => set({ hydrated }),
     }),
     {
       name: "clipstudio-recommendation-search",
-      partialize: ({ language, topic }) => ({ language, topic }),
+      partialize: ({ language, topic, contentStyle }) => ({ language, topic, contentStyle }),
       onRehydrateStorage: () => (state) => state?.setHydrated(true),
     },
   ),
